@@ -1,0 +1,32 @@
+{% load static tailwind_tags %}
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <title>{% block title %}{% endblock %}</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.2"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700;800;900&display=swap');
+      *{
+        font-family: 'Noto Sans',sans;
+      }
+      @media print {
+        @page {
+          margin: 0;
+        }
+        body {
+          margin: 2cm;
+        }
+      }
+    </style>
+    {% tailwind_css %}
+  </head>
+  <body class="leading-normal tracking-normal ">
+    {% block content %} {% endblock %}
+  </body>
+</html>

@@ -1,0 +1,14 @@
+Installation :
+Vous devez avoir Python
+pip install django
+pip install django-tailwind
+pip install django-crispy-forms
+pip install django_import_export
+pip install django-simple-history
+
+Normalment il y aura une autre error vous devez installer une librairie (just copier l'erreur en chatgpt)
+
+pour crée des comptes avec l'admin.
+magasinier: http://127.0.0.1:8000/magasinier_registration
+directeur: http://127.0.0.1:8000/directeur_registration
+employee: http://127.0.0.1:8000/employee_registration

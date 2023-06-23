@@ -1,0 +1,137 @@
+{%extends 'dashboard_employee.html' %}
+{%load static%} {% block title%}Bulletin de
+commande {{bulletin.pk}}{% endblock%} {%block header%}Bulletin de
+Commande{%endblock%} {% block main %}
+{% if messages %}
+  <ul class="messages">
+    {% for message in messages %}
+    <div class="flex items-center bg-blue-500 text-white text-sm font-bold px-4 py-3" role="alert">
+      <svg class="fill-current w-4 h-4 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M12.432 0c1.34 0 2.01.912 2.01 1.957 0 1.305-1.164 2.512-2.679 2.512-1.269 0-2.009-.75-1.974-1.99C9.789 1.436 10.67 0 12.432 0zM8.309 20c-1.058 0-1.833-.652-1.093-3.524l1.214-5.092c.211-.814.246-1.141 0-1.141-.317 0-1.689.562-2.502 1.117l-.528-.88c2.572-2.186 5.531-3.467 6.801-3.467 1.057 0 1.233 1.273.705 3.23l-1.391 5.352c-.246.945-.141 1.271.106 1.271.317 0 1.357-.392 2.379-1.207l.6.814C12.098 19.02 9.365 20 8.309 20z"/></svg>
+      <li{% if message.tags %} class="{{ message.tags }}"{% endif %}>{{ message }}</li>
+    </div>
+     
+    {% endfor %}
+  </ul>
+{% endif %}
+<div class="px-16" id="wraper">
+  <div class="border rounded-b-lg relative shadow-lg " id="content">
+    <div class="flex pt-12 pl-10">
+      <p class="text-xs w-64 text-center mr-24">
+        ROYAUME DU MAROC MINISTRE DU L'INTERIEUR <br />WILAYA DE LA REGION DE
+        L'ORIENTAL PREFECTURE D'OUJDA-ANGAD <br />CONSEIL PREFECORAL DIRECTION
+        GENERALES DES SERVICES <br />SERVICE PROGRAMMTION FINANCES ET BUDGET
+      </p>
+    </div>
+    <h1 class="text-center  mb-2 text-2xl font-bold text-sky-950 ">
+      Bulletin de Commande #{{ bulletin.pk }}
+    </h1>
+    <div class="flex justify-around items-center ">
+      <p class="text-center mt-4 mb-2 text-md font-bold text-slate-600">
+        Demander Par {{bulletin.employe.nom}} {{bulletin.employe.prenom}}
+      </p>
+      <p class="mt-4 mb-2 text-md font-bold text-slate-600">
+        Date: {{bulletin.date}}
+      </p>
+    </div>
+
+    <h2 class="text-center my-6 mt-16 font-semibold text-slate-600 ">
+      Le Responsable du {{bulletin.employe.service.nom}} demande les
+      fournitures<br />
+      et matériels désignés au tableau ci-dessous:
+    </h2>
+
+    <div class="px-8 pb-5">
+      <table class="w-full">
+        <thead>
+          <tr>
+            <th
+              class="text-center py-2 px-3 text-amber-300 font-bold border border-amber-400 bg-sky-950"
+              rowspan="2"
+            >
+              Designation des fournitures
+            </th>
+            <th
+              class="text-center py-2 px-3 text-amber-300 font-bold  border border-amber-400 bg-sky-950"
+              colspan="2"
+            >
+              Quantité
+            </th>
+          </tr>
+          <tr>
+            <th
+              class="text-center py-2 px-3 text-amber-300 font-bold border border-amber-400 bg-sky-950 "
+            >
+              Demandée
+            </th>
+            <th
+              class="text-center py-2 px-3 text-amber-300 font-bold border border-amber-400 bg-sky-950 "
+            >
+              Fournie
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for demande in bulletin.demandedeproduit_set.all %}
+          <tr class="">
+            <td class="py-1 border-b border-x px-2 text-center">
+              {{ demande.produit_demande.libelle }}
+            </td>
+            <td class="py-1 border-b border-x px-2 text-center">
+              {{ demande.quantite_demande }}
+            </td>
+
+            <td class="py-1 border-b border-x px-2 text-center">
+              {{ demande.quantite_fournie }}
+            </td>
+          </tr>
+          {%endfor%}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="flex justify-center mt-5 mb-5">
+    <button
+      id="btn-print"
+      class="inline-block px-6 py-2 text-xs font-medium leading-6 text-center text-white uppercase transition bg-amber-500 rounded-full shadow ripple hover:shadow-lg hover:bg-amber-600 focus:outline-none  justify-center w-1/3"
+    >
+      Print et PDF
+    </button>
+    {%if bulletin.state != "approver" %}
+
+    <a
+      href="{% url 'transactions:supprimer_bulletin' pk=bulletin.pk %} "
+      class="w-1/8 px-5 "
+    >
+      <button
+        id="supprimer"
+        class="inline-block px-5 py-0 text-xs font-medium leading-4 text-center text-white uppercase transition bg-red-500 rounded-full shadow ripple hover:shadow-lg hover:bg-red-600 focus:outline-none w-full h-full "
+      >
+        Supprimer
+      </button>
+    </a>
+  {%endif%}
+</div>
+<script>
+  jQuery(document).ready(function(){
+    $('#btn-print').click(function(){
+
+     // Hide the buttons
+     document.getElementById("btn-print").style.display = "none";
+     document.getElementById("supprimer").style.display = "none";
+     document.getElementById("nav").style.display = "none";
+     document.getElementById("top").style.display = "none";
+     document.getElementById("main").style.paddingLeft="0";
+     document.getElementById("wraper").style.padding="0";
+     document.getElementById("wraper2").style.padding="0";
+     document.getElementById("content").style.boxShadow="none";
+     document.getElementById("content").style.border="none";
+
+
+
+     // Print the page
+     window.print();
+     location.reload();
+     // Show the buttons again
+   })})
+</script>
+{% endblock %}

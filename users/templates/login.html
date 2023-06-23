@@ -1,0 +1,61 @@
+{% extends 'base.html'%}{% load static%} {%block title%} Login {%endblock%}
+{%block content%}
+<div class="lg:flex">
+  <div class="lg:w-1/2 xl:max-w-screen-sm">
+      <div class="py-12 bg-amber-100 lg:bg-white flex justify-center lg:justify-start lg:px-12">
+          <div class="cursor-pointer flex items-center">
+            <img src="{% static 'users/logo.png'%}"
+            alt="logo de la prefecture d'oujda angad" class="h-24 pb-3" >
+
+              <div class="text-xl text-slate-500 tracking-wide ml-2 font-semibold">Conseil De La Prefecture <br />
+                D'Oujda Angad</div>
+          </div>
+      </div>
+      <div class="mt-10 px-12 sm:px-24 md:px-48 lg:px-12 lg:mt-16 xl:px-24 xl:max-w-2xl">
+          <h2 class="text-center text-4xl text-amber-400 font-display font-semibold lg:text-left xl:text-5xl
+          xl:text-bold">Se connecter</h2>
+          <div class="mt-12 connection">
+              <form method="POST">
+                {% csrf_token %}
+                  <div class="border-b border-amber-400">
+                      <div class="text-sm font-bold text-slate-700 tracking-wide">Nom utilisateur</div>
+                      <input class="w-full text-lg  py-2  mt-1 rounded-md border-transparent focus:border-transparent focus:ring-0 border-slate-300  focus:border-amber-500" id="username" name="username"
+                      type="text"
+              name="username" placeholder="Entrer votre identifient">
+                  </div>
+                  <div class="mt-8 border-b border-amber-400">
+                    <div class="flex justify-between items-center">
+                        <div class="text-sm font-bold text-slate-700 tracking-wide">
+                            Mot de passe
+                        </div>
+                      
+                    </div>
+                    <input type="password" name="password" class="w-full text-lg py-2 border-transparent focus:border-transparent focus:ring-0 border-b border-slate-300  focus:border-amber-500 rounded-md mt-1 " placeholder="Enter votre mot de passe" >
+                </div>
+                  {% if messages %}
+                    <ul class="messages">
+                        {% for message in messages %}
+                          <li{% if message.tags %} class="{{ message.tags }}"{% endif %}>{{ message }}</li>
+                        {% endfor %}
+                    </ul>
+                   {% endif %}
+                  <div class="mt-10">
+                      <button class="bg-amber-500 text-slate-100 p-4 w-full rounded-full tracking-wide
+                      font-semibold font-display focus:outline-none focus:shadow-outline hover:bg-amber-600
+                      shadow-lg">
+                          Se connecter
+                      </button>
+                  </div>
+              </form>
+             
+          </div>
+      </div>
+  </div>
+  <div class="hidden lg:flex items-center justify-center bg-amber-100 flex-1 h-screen">
+      <div class="max-w-md transform duration-200 hover:scale-110 cursor-pointer">
+        <img src="{% static 'users/ilustock.png'%}"
+        alt="illustration de gestion de stock"class="w-max  mx-auto" >
+      </div>
+  </div>
+</div>
+{% endblock%}

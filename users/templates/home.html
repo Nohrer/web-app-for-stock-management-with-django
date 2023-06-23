@@ -1,0 +1,144 @@
+{% extends 'dashboard.html' %} {%load static%} {% comment %} s {% endcomment %}
+{% block header%} Tableau de Bord {%endblock%} {%block main%}
+
+<div class="w-full  h-40 flex  px-16 gap-16 mt-6 ">
+  <div class="w-full rounded-lg  border-2 border-slate-300  flex-1 relative">
+    <div
+      class="flex text-amber-400 text-xl font-bold bg-white gap-2 w-fit absolute bottom-36 ml-6 px-2 items-center"
+    >
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke-width="1.5"
+        stroke="currentColor"
+        class="w-9 h-9"
+      >
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          d="M7.875 14.25l1.214 1.942a2.25 2.25 0 001.908 1.058h2.006c.776 0 1.497-.4 1.908-1.058l1.214-1.942M2.41 9h4.636a2.25 2.25 0 011.872 1.002l.164.246a2.25 2.25 0 001.872 1.002h2.092a2.25 2.25 0 001.872-1.002l.164-.246A2.25 2.25 0 0116.954 9h4.636M2.41 9a2.25 2.25 0 00-.16.832V12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 12V9.832c0-.287-.055-.57-.16-.832M2.41 9a2.25 2.25 0 01.382-.632l3.285-3.832a2.25 2.25 0 011.708-.786h8.43c.657 0 1.281.287 1.709.786l3.284 3.832c.163.19.291.404.382.632M4.5 20.25h15A2.25 2.25 0 0021.75 18v-2.625c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125V18a2.25 2.25 0 002.25 2.25z"
+        />
+      </svg>
+      <p>Produits:</p>
+    </div>
+    <div class="mt-10 ml-9 text-lg font-bold flex flex-col gap-3">
+      <p>Catégories: <span class="font-normal"> {{ categorie.count }}</span></p>
+      <p>Total: <span class="font-normal">{{ produit.count }}</span></p>
+    </div>
+  </div>
+  <div class="w-full  rounded-lg  border-2 border-slate-300  flex-1 relative">
+    <div
+      class="flex text-amber-400 text-xl font-bold bg-white gap-2 w-fit absolute bottom-36 ml-6 px-2 items-center"
+    >
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke-width="1.5"
+        stroke="currentColor"
+        class="w-9 h-9"
+      >
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25zM6.75 12h.008v.008H6.75V12zm0 3h.008v.008H6.75V15zm0 3h.008v.008H6.75V18z"
+        />
+      </svg>
+
+      <p>Bulletin:</p>
+    </div>
+    <div
+      class="mt-10 ml-9 text-lg font-bold grid grid-cols-2 grid-rows-2 gap-3"
+    >
+      {% for count in bulletin_counts %} {% if count.state == 'demander' %}
+      <p>Nouveau: <span class="font-normal">{{ count.count }}</span></p>
+      {% elif count.state == 'traiter' %}
+      <p>Traiter: <span class="font-normal">{{ count.count }}</span></p>
+      {% elif count.state == 'approver' %}
+      <p>Approver: <span class="font-normal">{{ count.count }}</span></p>
+      {% endif %} {% endfor %}
+    </div>
+  </div>
+</div>
+<div class="w-full  h-80 mt-12">
+  <h2 class="text-xl font-bold my-4 mb-2 pl-2 text-slate-500">
+    Nouvelle Demande:
+  </h2>
+  <div class="border rounded-b-lg  overflow-hidden">
+    <table class="w-full">
+      <thead>
+        <tr>
+          <th class="text-start py-4 px-3 text-amber-300 font-bold bg-sky-950">
+            Date
+          </th>
+          <th class="text-start py-4 px-3 text-amber-300 font-bold bg-sky-950">
+            Demandeur
+          </th>
+          <th class="text-start py-4 px-3 text-amber-300 font-bold bg-sky-950">
+            Consulter
+          </th>
+          <th class="text-start py-4 px-3 text-amber-300 font-bold bg-sky-950">
+            Modifier
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for bulletin in bulletins%} {% if bulletin.state == 'demander'%}
+        <tr>
+          <td class="py-3 border-b px-2">{{ bulletin.date }}</td>
+          <td class="py-3 border-b px-2">
+            {{ bulletin.employe.nom }} {{ bulletin.employe.prenom }}
+          </td>
+          <td class="py-3 border-b px-2">
+            <a
+              href="{% url 'transactions:voir_bulletin' bulletin.pk %}"
+              class="flex justify-start pl-10 hover:text-red-400 transition-all"
+              ><svg
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke-width="1.5"
+                stroke="currentColor"
+                class="w-6 h-6 flex"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z"
+                />
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                />
+              </svg>
+            </a>
+          </td>
+          <td class="py-3 border-b px-2">
+            <a
+              href="{% url 'transactions:bulletin_detail' bulletin.pk %}"
+              class="flex justify-start pl-10 hover:text-red-400 transition-all"
+              ><svg
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke-width="1.5"
+                stroke="currentColor"
+                class="w-6 h-6"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125"
+                />
+              </svg>
+            </a>
+          </td>
+        </tr>
+        {% endif %} {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{%endblock%}

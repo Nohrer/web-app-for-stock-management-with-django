@@ -1,0 +1,107 @@
+{%extends page_temp %} {%load static%} {% block title%} Etat bulletin de
+Commande{% endblock%} {%block header%} Etat bulletin de Commande{% endblock%}
+{%block main%}
+<form method="post" id="wraper">
+  {% csrf_token %}
+  <p class=" text-gray-700 font-bold my-2">Date Debut:</p>
+  {{ form.date_debut }}
+  <p class=" text-gray-700 font-bold my-2">Date Fin:</p>
+
+  {{ form.date_fin }}
+  <p class="text-gray-700 font-bold my-2">Catégorie:</p>
+  <div class="flex">
+  {{ form.categories }}
+</div>
+  <div class="flex justify-center mt-5 mb-5">
+    <button
+      type="submit"
+      class="inline-block px-6 py-2 text-xs font-medium leading-6 text-center text-white uppercase transition bg-amber-500 rounded-full shadow ripple hover:shadow-lg hover:bg-amber-600 focus:outline-none  justify-center w-1/3"
+    >
+      Rechercher
+    </button>
+  </div>
+</form>
+{%if quantities%}
+<div class="border rounded-b-lg relative shadow-lg my-6 " id="content">
+  <div class="flex pt-12 pl-10 justify-between">
+    <p class="text-xs w-64 text-center mr-24">
+      ROYAUME DU MAROC MINISTRE DU L'INTERIEUR <br />WILAYA DE LA REGION DE
+      L'ORIENTAL PREFECTURE D'OUJDA-ANGAD <br />CONSEIL PREFECORAL DIRECTION
+      GENERALES DES SERVICES <br />SERVICE PROGRAMMTION FINANCES ET BUDGET
+    </p>
+    <img src="{% static 'users/logo.png'%}" alt="logo" class="w-20 mr-28" />
+  </div>
+
+  <div class="flex justify-center flex-col items-center text-2xl mt-10 mb-10">
+    <p class="mt-4   font-bold text-slate-600">Etat du Bulletin de Commande</p>
+    <p class="mt-4 mb-2 font-semibold text-slate-600">
+      <span>du {{date_debut}}</span>
+      <span>au {{date_fin}}</span>
+    </p>
+  </div>
+
+  <div class="px-8 pb-5">
+    <table class="w-5/6 mx-auto">
+      <thead>
+        <tr>
+          <th
+            class="text-center py-2 px-3 text-amber-300 font-bold border border-amber-400 bg-sky-950"
+          >
+            Produit
+          </th>
+          <th
+            class="text-center py-2 px-3 text-amber-300 font-bold  border border-amber-400 bg-sky-950"
+          >
+            Quantité
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for product in quantities %} {%if not product.total_quantity == None %}
+        <tr class="text-center">
+          <td class="py-2 px-4 border-b border-x">{{ product }}</td>
+          <td class="py-2 px-4 border-b border-x">
+            {{ product.total_quantity }}
+          </td>
+        </tr>
+        {%endif%} {%endfor%}
+      </tbody>
+    </table>
+  </div>
+</div>
+<div class="flex justify-center mt-5 mb-5">
+  <button
+    id="btn-print"
+    class="inline-block px-6 py-2 text-xs font-medium leading-6 text-center text-white uppercase transition bg-amber-500 rounded-full shadow ripple hover:shadow-lg hover:bg-amber-600 focus:outline-none  justify-center w-1/3"
+  >
+    Print et PDF
+  </button>
+</div>
+{% else %}
+<p class="text-center text-gray-500">Aucun produit en stock à cette date.</p>
+{% endif %}
+
+<script>
+  jQuery(document).ready(function(){
+    $('#btn-print').click(function(){
+
+     // Hide the buttons
+     document.getElementById("btn-print").style.display = "none";
+     document.getElementById("nav").style.display = "none";
+     document.getElementById("top").style.display = "none";
+     document.getElementById("main").style.paddingLeft="0";
+     document.getElementById("wraper").style.display="none";
+     document.getElementById("wraper2").style.padding="0";
+     document.getElementById("content").style.boxShadow="none";
+     document.getElementById("content").style.border="none"
+
+
+
+     // Print the page
+     window.print();
+     location.reload();
+     // Show the buttons again
+   })})
+</script>
+
+{%endblock%}

@@ -1,0 +1,244 @@
+{%extends page_temp %}
+{% block title%}Bulletin de commande{% endblock%}
+{% block header%}Bulletin de commande{%endblock%} {%block main%}
+{% if messages %}
+  <ul class="messages">
+    {% for message in messages %}
+    <div class="flex items-center bg-blue-500 text-white text-sm font-bold px-4 py-3" role="alert">
+      <svg class="fill-current w-4 h-4 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M12.432 0c1.34 0 2.01.912 2.01 1.957 0 1.305-1.164 2.512-2.679 2.512-1.269 0-2.009-.75-1.974-1.99C9.789 1.436 10.67 0 12.432 0zM8.309 20c-1.058 0-1.833-.652-1.093-3.524l1.214-5.092c.211-.814.246-1.141 0-1.141-.317 0-1.689.562-2.502 1.117l-.528-.88c2.572-2.186 5.531-3.467 6.801-3.467 1.057 0 1.233 1.273.705 3.23l-1.391 5.352c-.246.945-.141 1.271.106 1.271.317 0 1.357-.392 2.379-1.207l.6.814C12.098 19.02 9.365 20 8.309 20z"/></svg>
+      <li{% if message.tags %} class="{{ message.tags }}"{% endif %}>{{ message }}</li>
+    </div>
+     
+    {% endfor %}
+  </ul>
+{% endif %}
+<div class="flex items-center justify-between">
+  <h2 class="text-xl font-bold my-4 mb-2 pl.2 text-slate-500">Bulletin:</h2>
+  <a
+    class="flex justify-center items-center gap-2 cursor-pointer text-xl font-semibold hover:text-amber-500 transition-all duration-300"
+    href="{% url 'transactions:new_bulletin'%}"
+  >
+    <p class="">Nouveau</p>
+
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke-width="1.5"
+      stroke="currentColor"
+      class="w-6 h-6 "
+    >
+      <path
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10"
+      />
+    </svg>
+  </a>
+</div>
+<div>
+  <form method="get" class="form-inline mb-3 ">
+    <div class="flex items-center justify-around gap-10">
+
+    <div class="flex w-full items-center gap-2">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-7 h-7 mt-8 fill-sky-800 stroke-slate-400">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 3c2.755 0 5.455.232 8.083.678.533.09.917.556.917 1.096v1.044a2.25 2.25 0 01-.659 1.591l-5.432 5.432a2.25 2.25 0 00-.659 1.591v2.927a2.25 2.25 0 01-1.244 2.013L9.75 21v-6.568a2.25 2.25 0 00-.659-1.591L3.659 7.409A2.25 2.25 0 013 5.818V4.774c0-.54.384-1.006.917-1.096A48.32 48.32 0 0112 3z" />
+      </svg>
+      <div class=" mr-3 flex flex-col w-full">
+      <label for="state" class="pb-2 font-semibold text-slate-600">État:</label>
+      <select name="state" id="state" class="border w-full rounded-lg py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+        <option value="">Tous</option>
+        {% for choice in state_choices %}
+        {% if choice != "supprimer"%}
+        <option value="{{ choice }}" {% if choice == selected_state %}selected{% endif %}>{{ choice }}</option>
+        {%endif%}
+        {% endfor %}
+      </select>
+    </div>
+    </div>
+    <div class= "mr-3  flex flex-col w-full">
+      <label for="employee" class="pb-2 font-semibold text-slate-600">Employé:</label>
+      <select name="employee" id="employee" class="border w-full rounded-lg py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+        <option value="">Tous</option>
+        {% for employee in employees %}
+        <option value="{{ employee.id }}" {% if employee.id == selected_employee %}selected{% endif %}>{{ employee }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class= "flex flex-col w-full">
+      <label for="date" class="pb-2 font-semibold text-slate-600">Date:</label>
+      <input type="date" name="date" id="date" class="border w-full rounded-lg py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" value="{{ selected_date }}">
+    </div>
+  </div>
+  <div class="flex justify-end items-end mt-3">
+    <button
+    type="submit"
+    class="inline-block px-5 py-2 text-xs font-medium leading-6 text-center text-white uppercase transition bg-sky-900 rounded-md shadow ripple hover:shadow-lg hover:bg-sky-950 focus:outline-none  justify-center mr-4"
+  >
+    Filtrer
+  </button>
+  </div>
+    </form>
+</div>
+<div class="border rounded-b-2xl  overflow-hidden">
+  <table class="w-full">
+    <thead>
+      <tr>
+        <th class="text-start py-4 px-3 text-amber-300 font-bold bg-sky-950 ">
+          Etat
+        </th>
+        <th class="text-start py-4 px-3 text-amber-300 font-bold bg-sky-950">
+          Date
+        </th>
+        <th class="text-start py-4 px-3 text-amber-300 font-bold bg-sky-950">
+          Demandeur
+        </th>
+        <th class="text-start py-4 px-3 text-amber-300 font-bold bg-sky-950">
+          Modifier
+        </th>
+        <th class="text-start py-4 px-3 text-amber-300 font-bold bg-sky-950">
+          Consulter
+        </th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for bulletin in page_obj %}
+      <tr>
+        {% if bulletin.state == 'demander'%}
+        <td class="py-1 border-b ">
+          <p class=" bg-blue-400 py-2 px-5 rounded-2xl  ml-3  w-fit ">
+            Demander
+          </p>
+        </td>
+        {%elif bulletin.state == 'approver'%}
+        <td class="py-1 border-b relative">
+          <p class=" bg-green-600 py-2 px-6 rounded-2xl  ml-3  w-fit">
+            Approver
+          </p>
+        </td>
+        {%elif bulletin.state == 'supprimer'%}
+        <td class="py-1 border-b relative">
+          <p class=" bg-red-600 py-2 px-6 rounded-2xl  ml-3  w-fit">
+            supprimer
+          </p>
+        </td>
+        
+        {%elif bulletin.state == 'traiter'%}
+        <td class="py-1 border-b relative">
+          <p class=" bg-yellow-400 py-2 px-8  rounded-2xl  ml-3  w-fit">
+            Traiter
+          </p>
+        </td>
+        {%else%}
+        <td class="py-1 border-b relative"></td>
+        {% endif %}
+        <td class="py-3 border-b px-2">{{ bulletin.date }}</td>
+        <td class="py-3 border-b px-2">
+          {{ bulletin.employe.nom }} {{ bulletin.employe.prenom }}
+        </td>
+        <td class="py-3 border-bpx-2">
+          {% if bulletin.state != 'approver' and bulletin.state != 'supprimer' %}
+          <a
+            href="{% url 'transactions:bulletin_detail' bulletin.pk %}"
+            class="flex justify-start pl-10 hover:text-red-400 transition-all"
+            ><svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke-width="1.5"
+              stroke="currentColor"
+              class="w-6 h-6"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125"
+              />
+            </svg>
+          </a>
+          {%else%}
+          <p class='pl-12'>/</p>
+          {%endif%}
+        </td>
+        <td class="py-3 border-b px-2">
+          <a
+            href="{% url 'transactions:voir_bulletin' bulletin.pk %}"
+            class="flex justify-start pl-10 hover:text-red-400 transition-all"
+            ><svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke-width="1.5"
+              stroke="currentColor"
+              class="w-6 h-6 flex"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z"
+              />
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+              />
+            </svg>
+          </a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <div class="flex justify-center my-4">
+    {% if page_obj.has_previous %}
+    <a
+    href="?state={{ selected_state }}&employee={{ selected_employee }}&date={{ selected_date }}&page={{ page_obj.previous_page_number }}"
+      class=" bg-amber-500 hover:bg-amber-600 text-white rounded-full transition-all duration-300"
+    >
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke-width="1.5"
+        stroke="currentColor"
+        class="w-7 h-7"
+      >
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          d="M11.25 9l-3 3m0 0l3 3m-3-3h7.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+        />
+      </svg>
+    </a>
+    {% endif %}
+    {% if page_obj.has_next  %}
+    {%if selected_state != "" or selected_employee != "" or selected_date != "" %}   
+    <a
+    href="?state={{ selected_state }}&employee={{ selected_employee }}&date={{ selected_date }}&page={{ page_obj.next_page_number }}"
+      class=" bg-amber-500 hover:bg-amber-600 text-white rounded-full transition-all duration-300"
+    >
+    {% else %}
+    <a
+    href="?page={{ page_obj.next_page_number }}"
+      class=" bg-amber-500 hover:bg-amber-600 text-white rounded-full transition-all duration-300"
+    >
+    {% endif %}
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke-width="1.5"
+        stroke="currentColor"
+        class="w-7 h-7"
+      >
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          d="M12.75 15l3-3m0 0l-3-3m3 3h-7.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+        />
+      </svg>
+    </a>
+  {% endif %}
+  </div>
+  {% endblock %}
+</div>

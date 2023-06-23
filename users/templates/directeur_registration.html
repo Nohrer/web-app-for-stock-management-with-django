@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Project-2</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    {% load crispy_forms_tags%}
+
+    <link
+      href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600&family=Tajawal:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      * {
+        padding: 0;
+        margin: 0;
+        box-sizing: border-box;
+        font-family: "Tajawal", sans-serif;
+      }
+      html {
+        /* font-size: 10px; */
+
+        font-size: 56.5%;
+      }
+      body {
+        max-width: 72rem;
+        margin: 8.6rem auto;
+      }
+      header {
+        text-align: center;
+        margin-bottom: 2rem;
+      }
+      input {
+        position: relative;
+        font-size: 2rem;
+        display: inline-block;
+      }
+
+      #title {
+        font-size: 6.2rem;
+        font-weight: 600;
+      }
+      #description {
+        font-size: 3.2rem;
+        font-weight: 500;
+      }
+      label {
+        font-size: 2.4rem;
+        font-weight: 500;
+      }
+      p {
+        font-size: 2.4rem;
+        font-weight: 500;
+      }
+      #survey-form {
+        padding: 3rem 5rem;
+        box-shadow: 0 0 20px rgba(85, 85, 85, 0.166);
+        display: flex;
+        flex-direction: column;
+        gap: 2rem;
+        margin: 2rem;
+      }
+      .form-group {
+        display: flex;
+        flex-direction: column;
+        justify-content: space-around;
+        gap: 1rem;
+      }
+      input[type="text"],
+      input[type="number"],
+      input[type="email"],
+      select,
+      textarea {
+        background: rgba(176, 173, 173, 0.321);
+        border: none;
+        padding: 1rem;
+        border-radius: 5px;
+        font-size: 1.8rem;
+      }
+      button {
+        font-size: 2.4rem;
+        border-radius: 6px;
+        padding: 6px 0;
+      }
+      button:hover {
+        color: #555;
+      }
+      input {
+        width: 100%;
+      }
+      li {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <p id="description">Creation Directeur</p>
+    </header>
+    <form id="survey-form" method="post">
+      {% csrf_token %}
+      <div class="form-group">{{form.as_p }}</div>
+
+      <!-- Button -->
+      <div class="form-group">
+        <button type="Submit" id="submit">Enregistrer</button>
+      </div>
+    </form>
+  </body>
+</html>

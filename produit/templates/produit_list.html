@@ -1,0 +1,146 @@
+
+{%extends page_temp %}
+
+
+{%block title %} Magasin {%endblock %}
+{%block header%}Magasin{% endblock%}
+{%block main %}
+<div>
+  <p class="text-lg font-semibold mt-4 mb-2 pl-2 text-slate-500">Catégories:</p>
+
+  <div
+    class="w-full h-8 bg-sky-950 flex justify-around rounded-t-lg text-white  items-center"
+  >
+    <a
+      href="?"
+      class="flex-1 text-center hover:bg-slate-800 hover:text-amber-400 transition-all"
+      >Tous</a
+    >
+    {% for categorie in categories%}
+    <a
+      href="?categorie={{ categorie.nom }}"
+      class="border-l-2 border-amber-400 flex-1 text-center hover:bg-slate-800 hover:text-amber-400 transition-all "
+      >{{ categorie.nom }}</a
+    >
+    {%endfor%}
+  </div>
+</div>
+<form
+  action="{% url 'produit:search_product' %}"
+  method="GET"
+  class="flex items-center bg-slate-200  gap-10  border-x-1 border-slate-400 py-1 "
+>
+  <p class="text-lg font-semibold  mb-2 text-slate-600 pl-4">Recherche:</p>
+  <input
+    type="text"
+    name="q"
+    placeholder="Produit..."
+    class="bg-slate-200 rounded-lg w-full cursor-pointer"
+  />
+  <button type="submit" class="mr-10">
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke-width="1.5"
+      stroke="currentColor"
+      class="w-6 h-6"
+    >
+      <path
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"
+      />
+    </svg>
+  </button>
+</form>
+<div class="border rounded-b-lg  overflow-hidden">
+  <table class="w-full">
+    <thead>
+      <tr>
+        <th class="text-start py-4 px-3 text-amber-300 font-bold bg-sky-950">
+          Libelle
+        </th>
+        <th class="text-start py-4 px-3 text-amber-300 font-bold bg-sky-950">
+          Reference
+        </th>
+        <th class="text-start py-4 px-3 text-amber-300 font-bold bg-sky-950">
+          Quantite
+        </th>
+        <th class="text-start py-4 px-3 text-amber-300 font-bold bg-sky-950">
+          Detaille
+        </th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for product in products%}
+      <tr>
+        <td class="py-3 border-b px-2">{{ product.libelle }}</td>
+        <td class="py-3 border-b px-2">{{ product.reference }}</td>
+        <td class="py-3 border-b px-2">{{ product.quantite }}</td>
+        <td class="py-3 border-b px-2">
+          <acronym title="{{ product.detaille }}">{{ product. }} </acronym>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <div class="flex justify-center my-4">
+    {% if products.has_previous %}
+    {% if selected_category %}
+    
+    <a
+      href="?page={{ products.previous_page_number }}&categorie={{ selected_category }}"
+      class=" bg-amber-500 hover:bg-amber-600 text-white rounded-full transition-all duration-300"
+    >
+    {%else%}
+    <a
+      href="?page={{ products.previous_page_number }}"
+      class=" bg-amber-500 hover:bg-amber-600 text-white rounded-full transition-all duration-300"
+    >
+    {%endif%}
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke-width="1.5"
+        stroke="currentColor"
+        class="w-7 h-7"
+      >
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          d="M11.25 9l-3 3m0 0l3 3m-3-3h7.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+        />
+      </svg>
+    </a>
+    {% endif %} {% if products.has_next %}
+    {% if selected_category %}
+    <a
+      href="?page={{ products.next_page_number }}&categorie={{ selected_category }}"
+      class=" bg-amber-500 hover:bg-amber-600 text-white rounded-full transition-all duration-300"
+    >
+    {%else%}
+    <a
+      href="?page={{ products.next_page_number }}"
+      class=" bg-amber-500 hover:bg-amber-600 text-white rounded-full transition-all duration-300"
+    >{%endif%}
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke-width="1.5"
+        stroke="currentColor"
+        class="w-7 h-7"
+      >
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          d="M12.75 15l3-3m0 0l-3-3m3 3h-7.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+        />
+      </svg>
+    </a>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,135 @@
+{% extends 'dashboard.html' %} {% block title%} Bon de livraison {% endblock%}
+{% block header%}Bon de livraison{%endblock%} {%block main%}
+{% if messages %}
+  <ul class="messages">
+    {% for message in messages %}
+    <div class="flex items-center bg-blue-500 text-white text-sm font-bold px-4 py-3" role="alert">
+      <svg class="fill-current w-4 h-4 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M12.432 0c1.34 0 2.01.912 2.01 1.957 0 1.305-1.164 2.512-2.679 2.512-1.269 0-2.009-.75-1.974-1.99C9.789 1.436 10.67 0 12.432 0zM8.309 20c-1.058 0-1.833-.652-1.093-3.524l1.214-5.092c.211-.814.246-1.141 0-1.141-.317 0-1.689.562-2.502 1.117l-.528-.88c2.572-2.186 5.531-3.467 6.801-3.467 1.057 0 1.233 1.273.705 3.23l-1.391 5.352c-.246.945-.141 1.271.106 1.271.317 0 1.357-.392 2.379-1.207l.6.814C12.098 19.02 9.365 20 8.309 20z"/></svg>
+      <li{% if message.tags %} class="{{ message.tags }}"{% endif %}>{{ message }}</li>
+    </div>
+     
+    {% endfor %}
+  </ul>
+{% endif %}
+<div class="flex items-center justify-between">
+  <h2 class="text-xl font-bold my-4 mb-2 pl.2 text-slate-500">Bons:</h2>
+  <a
+    class="flex justify-center items-center gap-2 cursor-pointer text-xl font-semibold hover:text-amber-500 transition-all duration-300"
+    href="{% url 'transactions:new_bon'%}"
+  >
+    <p class="">Nouveau</p>
+
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke-width="1.5"
+      stroke="currentColor"
+      class="w-6 h-6 "
+    >
+      <path
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10"
+      />
+    </svg>
+  </a>
+</div>
+<div class="border rounded-b-2xl  overflow-hidden">
+  <table class="w-full">
+    <thead>
+      <tr>
+        <th class="text-start py-4 px-3 text-amber-300 font-bold bg-sky-950">
+          Date
+        </th>
+        <th class="text-start py-4 px-3 text-amber-300 font-bold bg-sky-950">
+          Fournisseur
+        </th>
+
+        <th class="text-start py-4 px-3 text-amber-300 font-bold bg-sky-950">
+          Consulter
+        </th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for bulletin in page_obj %}
+      <tr>
+        <td class="py-3 border-b px-2">{{ bulletin.date }}</td>
+        <td class="py-3 border-b px-2">
+          {{ bulletin.employe.nom }} {{ bulletin.fournisseur }}
+        </td>
+
+        <td class="py-3 border-b px-2">
+          <a
+            href="{% url 'transactions:voir_bon' bulletin.pk %}"
+            class="flex justify-start pl-10 hover:text-red-400 transition-all"
+            ><svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke-width="1.5"
+              stroke="currentColor"
+              class="w-6 h-6 flex"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z"
+              />
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+              />
+            </svg>
+          </a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <div class="flex justify-center my-4">
+    {% if page_obj.has_previous %}
+    <a
+      href="?page={{ page_obj.previous_page_number }}"
+      class=" bg-amber-500 hover:bg-amber-600 text-white rounded-full transition-all duration-300"
+    >
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke-width="1.5"
+        stroke="currentColor"
+        class="w-7 h-7"
+      >
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          d="M11.25 9l-3 3m0 0l3 3m-3-3h7.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+        />
+      </svg>
+    </a>
+    {% endif %} {% if page_obj.has_next %}
+    <a
+      href="?page={{ page_obj.next_page_number }}"
+      class=" bg-amber-500 hover:bg-amber-600 text-white rounded-full transition-all duration-300"
+    >
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke-width="1.5"
+        stroke="currentColor"
+        class="w-7 h-7"
+      >
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          d="M12.75 15l3-3m0 0l-3-3m3 3h-7.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+        />
+      </svg>
+    </a>
+    {% endif %}
+  </div>
+  {% endblock %}
+</div>

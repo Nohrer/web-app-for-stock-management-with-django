@@ -1,0 +1,25 @@
+{% extends 'dashboard.html' %} {% comment %} ssssssssssssssss {% endcomment %}
+{% block title %}Modifier Bulletin de commande{% endblock %} {% block main %}
+<h1>Modifier Bulletin de commande</h1>
+<p>Date: {{bulletin.date|date:"d/m/Y"}}</p>
+<p>Demandée Par: {{bulletin.employe }}</p>
+
+<form method="post">
+  {% csrf_token %}
+  <h2>Demande de produits</h2>
+  {% for demande in bulletin.demandedeproduit_set.all %}
+  <div class="form-group">
+    <label for="id_demande_{{ demande.id }}"
+      >{{ demande.produit_demande.libelle }}:</label
+    >
+    <input type="number" id="id_demande_{{ demande.id }}" name="demande_{{
+    demande.id }}" {%if demande.quantite_fournie == None%} value="{{
+    demande.quantite_demande}}" {%else%} value="{{ demande.quantite_fournie}}"
+    {%endif%} class="form-control" />
+  </div>
+  {% endfor %}
+  <button type="submit" class="btn btn-primary">Save</button>
+  <a href="{% url 'transactions:bulletin_modify' bulletin.pk %}">Modifier</a>
+</form>
+
+{% endblock %}
