@@ -12,6 +12,123 @@
   </a>
 </div>
 
+<script>
+  (function(){
+    function initHistoriqueActions() {
+      console.log('[historique] init start');
+
+      function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+          const cookies = document.cookie.split(';');
+          for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+              cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+              break;
+            }
+          }
+        }
+        return cookieValue;
+      }
+
+      const csrfToken = getCookie('csrftoken');
+      console.log('[historique] csrf token available:', Boolean(csrfToken));
+
+      const markDeliveredButtons = document.querySelectorAll('.mark-delivered');
+      const deleteButtons = document.querySelectorAll('.delete-demande');
+      console.log('[historique] buttons found:', {
+        markDelivered: markDeliveredButtons.length,
+        delete: deleteButtons.length,
+      });
+
+      markDeliveredButtons.forEach(btn => {
+        btn.addEventListener('click', function(e){
+          e.preventDefault();
+          const demandeId = this.getAttribute('data-demande-id');
+          console.log('[historique] mark delivered click:', demandeId);
+          if (!confirm('Êtes-vous sûr ?\n\nCela marquera la demande comme livrée et approuvera les produits.')) return;
+
+          const payload = `demande_id=${encodeURIComponent(demandeId)}&new_state=delivered`;
+          console.log('[historique] sending mark delivered request', payload);
+
+          fetch("{% url 'transactions:api_update_demande_state' %}", {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+              'X-CSRFToken': csrfToken,
+            },
+            body: payload
+          }).then(r => {
+            console.log('[historique] mark delivered response status:', r.status);
+            if (!r.ok) {
+              throw new Error(`HTTP ${r.status}: ${r.statusText}`);
+            }
+            return r.json();
+          }).then(data => {
+            console.log('[historique] mark delivered response body:', data);
+            if (data.ok) {
+              alert('Demande marquée comme livrée et produits approuvés.');
+              location.reload();
+            } else {
+              alert('Erreur serveur: ' + (data.error || 'Impossible de mettre à jour.'));
+            }
+          }).catch(err => {
+            console.error('Mark delivered error:', err);
+            alert('Erreur: ' + err.message);
+          });
+        });
+      });
+
+      // Delete demande
+      deleteButtons.forEach(btn => {
+        btn.addEventListener('click', function(e){
+          e.preventDefault();
+          const demandeId = this.getAttribute('data-demande-id');
+          console.log('[historique] delete click:', demandeId);
+          const confirmed = confirm('Êtes-vous sûr de vouloir supprimer cette demande ?\n\nCette action est irréversible.');
+          if (!confirmed) return;
+
+          const deleteUrl = `/demande_fournisseur/${encodeURIComponent(demandeId)}/delete/`;
+          console.log('[historique] sending delete request to:', deleteUrl);
+
+          fetch(deleteUrl, {
+            method: 'POST',
+            headers: {
+              'X-CSRFToken': csrfToken,
+            }
+          }).then(r => {
+            console.log('[historique] delete response status:', r.status);
+            if (!r.ok) {
+              throw new Error(`HTTP ${r.status}: ${r.statusText}`);
+            }
+            return r.json();
+          }).then(data => {
+            console.log('[historique] delete response body:', data);
+            if (data.ok) {
+              alert('Demande supprimée avec succès.');
+              location.reload();
+            } else {
+              alert('Erreur serveur: ' + (data.error || 'Impossible de supprimer.'));
+            }
+          }).catch(err => {
+            console.error('Delete error:', err);
+            alert('Erreur: ' + err.message);
+          });
+        });
+      });
+
+      console.log('[historique] init done');
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initHistoriqueActions);
+    } else {
+      initHistoriqueActions();
+    }
+  })();
+</script>
+
 <form method="get" class="mb-6 grid gap-4 rounded-3xl border border-slate-200 bg-white p-5 shadow-lg md:grid-cols-3">
   <div>
     <label class="mb-2 block text-sm font-semibold text-slate-700">Catégorie</label>
@@ -44,8 +161,9 @@
         <th class="bg-sky-950 px-4 py-3 text-left text-sm font-bold text-amber-300">Objet</th>
         <th class="bg-sky-950 px-4 py-3 text-left text-sm font-bold text-amber-300">Catégorie</th>
         <th class="bg-sky-950 px-4 py-3 text-left text-sm font-bold text-amber-300">Fournisseurs</th>
-        <th class="bg-sky-950 px-4 py-3 text-left text-sm font-bold text-amber-300">Email</th>
+        <th class="bg-sky-950 px-4 py-3 text-left text-sm font-bold text-amber-300">Statut</th>
         <th class="bg-sky-950 px-4 py-3 text-left text-sm font-bold text-amber-300">Produits</th>
+        <th class="bg-sky-950 px-4 py-3 text-left text-sm font-bold text-amber-300">Action</th>
       </tr>
     </thead>
     <tbody>
@@ -64,10 +182,12 @@
           </div>
         </td>
         <td class="px-4 py-4 text-sm">
-          {% if demande.email_envoye %}
-          <span class="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">Envoyé</span>
-          {% else %}
-          <span class="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">En attente</span>
+          {% if demande.etat == 'created' %}
+          <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">Créée</span>
+          {% elif demande.etat == 'sent' %}
+          <span class="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700">Envoyée</span>
+          {% elif demande.etat == 'delivered' %}
+          <span class="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">Livrée</span>
           {% endif %}
         </td>
         <td class="px-4 py-4 text-sm text-slate-600">
@@ -79,10 +199,21 @@
             {% endfor %}
           </ul>
         </td>
+        <td class="px-4 py-4 text-sm">
+          <div class="flex flex-wrap gap-2">
+            {% if demande.etat != 'delivered' %}
+            <a href="{% url 'transactions:edit_demande' demande.pk %}" class="rounded-full border border-blue-300 px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-50 transition">Éditer</a>
+            <button type="button" data-demande-id="{{ demande.pk }}" class="mark-delivered rounded-full border border-emerald-300 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 transition">Marquer livré</button>
+            <button type="button" data-demande-id="{{ demande.pk }}" class="delete-demande rounded-full border border-red-300 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50 transition">Supprimer</button>
+            {% else %}
+            <span class="rounded-full bg-emerald-100 px-3 py-2 text-xs font-semibold text-emerald-700">Livrée</span>
+            {% endif %}
+          </div>
+        </td>
       </tr>
       {% empty %}
       <tr>
-        <td colspan="6" class="px-4 py-8 text-center text-sm text-slate-500">Aucune demande enregistrée.</td>
+        <td colspan="7" class="px-4 py-8 text-center text-sm text-slate-500">Aucune demande enregistrée.</td>
       </tr>
       {% endfor %}
     </tbody>

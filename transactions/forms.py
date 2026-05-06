@@ -182,7 +182,7 @@ class DemandeApprovisionnementForm(forms.ModelForm):
         )
         widgets = {
             'date': forms.DateInput(attrs={'type': 'date', 'class': 'w-full rounded-xl border-slate-300 shadow-sm focus:border-sky-500 focus:ring-sky-500'}),
-            'categorie': forms.Select(attrs={'class': 'w-full rounded-xl border-slate-300 shadow-sm focus:border-sky-500 focus:ring-sky-500', 'id': 'id_categorie'}),
+            'categorie': forms.HiddenInput(),
             'delai_max_jours': forms.NumberInput(attrs={'class': 'w-full rounded-xl border-slate-300 shadow-sm focus:border-sky-500 focus:ring-sky-500'}),
             'objet': forms.TextInput(attrs={'class': 'w-full rounded-xl border-slate-300 shadow-sm focus:border-sky-500 focus:ring-sky-500'}),
             'message': forms.Textarea(attrs={'rows': 4, 'class': 'w-full rounded-xl border-slate-300 shadow-sm focus:border-sky-500 focus:ring-sky-500'}),
@@ -192,12 +192,29 @@ class DemandeApprovisionnementForm(forms.ModelForm):
     def __init__(self, *args, fournisseurs_queryset=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['fournisseurs'].queryset = fournisseurs_queryset or Fournisseur.objects.none()
+        # Make categorie optional in the form so it doesn't block validation if empty
+        self.fields['categorie'].required = False
         # if the form was initialized with an instance, populate categories initial
         if self.instance and self.instance.pk:
             try:
                 self.fields['categories'].initial = [self.instance.categorie.pk]
             except Exception:
                 self.fields['categories'].initial = []
+
+    def clean(self):
+        cleaned = super().clean()
+        # The model requires `categorie` (single FK), but the form exposes `categories`
+        # (multi-select). If no `categorie` was provided directly, derive it from
+        # the first selected category so the model validation passes.
+        if not cleaned.get('categorie'):
+            cats = cleaned.get('categories')
+            if cats:
+                # Set categorie from the first selected category
+                self.cleaned_data['categorie'] = cats[0]
+            else:
+                # both empty — surface a clear error on categories
+                self.add_error('categories', 'Veuillez sélectionner au moins une catégorie.')
+        return self.cleaned_data
 
 
 class DemandeApprovisionnementLigneForm(forms.ModelForm):

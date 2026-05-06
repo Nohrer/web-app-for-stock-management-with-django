@@ -2,6 +2,7 @@ from django.urls import reverse
 from django.template.loader import get_template
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render, redirect
+import json
 from .models import (
     Bulletin_de_commande,
     DemandeDeProduit,
@@ -120,7 +121,11 @@ def demande_fournisseur(request):
     fournisseurs_qs = Fournisseur.objects.all().order_by('delai_livraison_jours', 'prix_reference', 'nom')
 
     if selected_categories:
-        fournisseurs_qs = fournisseurs_qs.filter(categories__id__in=selected_categories).distinct()
+        # keep only suppliers that cover ALL selected categories
+        ids = [int(c) for c in selected_categories]
+        fournisseurs_qs = fournisseurs_qs.annotate(
+            _match_count=Count('categories', filter=Q(categories__id__in=ids))
+        ).filter(_match_count=len(ids)).distinct()
 
     selected_delai = request.POST.get('delai_max_jours') or request.GET.get('delai_max_jours')
 
@@ -183,10 +188,9 @@ def demande_fournisseur(request):
         initial = {
             'date': timezone.now().date(),
         }
-        if selected_categorie:
-            initial['categorie'] = selected_categorie
-        if fournisseurs_qs.exists():
-            initial['fournisseurs'] = list(fournisseurs_qs.values_list('pk', flat=True))
+        # if categories were supplied via GET, set initial for the form's categories field
+        if selected_categories:
+            initial['categories'] = selected_categories
 
         demande_form = DemandeApprovisionnementForm(
             initial=initial,
@@ -197,6 +201,9 @@ def demande_fournisseur(request):
             prefix='lignes',
         )
 
+    import json
+    categories_json = json.dumps(list(Categorie.objects.all().values('id', 'nom')))
+    
     return render(
         request,
         'demande_fournisseur.html',
@@ -205,6 +212,7 @@ def demande_fournisseur(request):
             'formset': formset,
             'fournisseurs': fournisseurs_qs,
             'categories': Categorie.objects.all(),
+            'categories_json': categories_json,
             'nom': nom,
             'prenom': prenom,
             'page_temp': page_temp,
@@ -274,8 +282,9 @@ def api_suppliers_by_category(request):
         ids = [int(x) for x in category_ids]
 
     suppliers = Fournisseur.objects.filter(categories__id__in=ids).distinct().annotate(
+        _match_count=Count('categories', filter=Q(categories__id__in=ids)),
         transaction_count=Count('demandes_approvisionnement')
-    ).values(
+    ).filter(_match_count=len(ids)).values(
         'id', 'nom', 'email', 'delai_livraison_jours', 'prix_reference', 'transaction_count'
     ).order_by('delai_livraison_jours', 'prix_reference', 'nom')
 
@@ -300,6 +309,107 @@ def api_products_by_category(request):
     products = Produit.objects.filter(categorie_id__in=ids).values('id', 'libelle').order_by('libelle')
 
     return JsonResponse({'products': list(products)})
+
+
+@login_required
+@require_POST
+def api_update_demande_state(request):
+    """Update demande `etat` (created|sent|delivered). If delivered, increment stock quantities."""
+    demande_id = request.POST.get('demande_id')
+    new_state = request.POST.get('new_state')
+    if not demande_id or not new_state:
+        return JsonResponse({'ok': False, 'error': 'missing parameters'}, status=400)
+
+    demande = get_object_or_404(DemandeApprovisionnement, pk=demande_id)
+
+    if new_state not in {'created', 'sent', 'delivered'}:
+        return JsonResponse({'ok': False, 'error': 'invalid state'}, status=400)
+
+    # if marking delivered, increment product stock based on lines
+    if new_state == 'delivered' and demande.etat != 'delivered':
+        for line in demande.lignes.select_related('produit').all():
+            p = line.produit
+            p.quantite = (p.quantite or 0) + (line.quantite or 0)
+            p.save(update_fields=['quantite'])
+
+    demande.etat = new_state
+    demande.save(update_fields=['etat'])
+    return JsonResponse({'ok': True})
+
+
+@login_required
+@user_passes_test(lambda user: user.is_directeur or user.is_magasinier)
+def edit_demande(request, pk):
+    demande = get_object_or_404(DemandeApprovisionnement, pk=pk)
+    employe = Employee.objects.filter(user=request.user).first()
+    if employe.user.is_directeur:
+        page_temp = 'dashboard_directeur.html'
+    else:
+        page_temp = 'dashboard.html'
+
+    # initial suppliers queryset based on existing demande.categorie
+    fournisseurs_qs = Fournisseur.objects.filter(categories__id=demande.categorie_id).distinct()
+
+    if request.method == 'POST':
+        action = request.POST.get('action')
+        demande_form = DemandeApprovisionnementForm(request.POST, instance=demande, fournisseurs_queryset=fournisseurs_qs)
+        formset = DemandeApprovisionnementLigneFormSet(request.POST, instance=demande, prefix='lignes')
+        if demande_form.is_valid() and formset.is_valid():
+            demande = demande_form.save(commit=False)
+            # set primary category from categories field if provided
+            selected_cats = demande_form.cleaned_data.get('categories') or []
+            if selected_cats:
+                demande.categorie = selected_cats[0]
+
+            if action == 'send':
+                demande.etat = 'sent'
+            else:
+                demande.etat = 'created'
+
+            demande.save()
+            demande_form.save_m2m()
+            formset.save()
+
+            if action == 'send':
+                sent_count = _send_supply_request_email(demande, f"{employe.nom} {employe.prenom}")
+                demande.email_envoye = sent_count > 0
+                demande.etat = 'sent' if sent_count else demande.etat
+                demande.save(update_fields=['email_envoye', 'etat'])
+
+            messages.success(request, 'Demande mise à jour.')
+            return redirect('transactions:historique_fournisseurs')
+        messages.error(request, 'Veuillez corriger les erreurs du formulaire.')
+    else:
+        # preserve the current date and categories when opening the edit form
+        initial = {
+            'date': demande.date,
+            'categories': [demande.categorie_id],
+        }
+        demande_form = DemandeApprovisionnementForm(instance=demande, initial=initial, fournisseurs_queryset=fournisseurs_qs)
+        formset = DemandeApprovisionnementLigneFormSet(instance=demande, prefix='lignes')
+
+    return render(request, 'demande_fournisseur.html', {
+        'demande_form': demande_form,
+        'formset': formset,
+        'fournisseurs': fournisseurs_qs,
+        'categories': Categorie.objects.all(),
+        'categories_json': json.dumps(list(Categorie.objects.all().values('id', 'nom'))),
+        'nom': employe.nom,
+        'prenom': employe.prenom,
+        'page_temp': page_temp,
+    })
+
+
+@login_required
+@require_POST
+def delete_demande(request, pk):
+    """Delete a DemandeApprovisionnement instance."""
+    try:
+        demande = get_object_or_404(DemandeApprovisionnement, pk=pk)
+        demande.delete()
+        return JsonResponse({'ok': True})
+    except Exception as e:
+        return JsonResponse({'ok': False, 'error': str(e)}, status=500)
 
 
 #BULLETIN

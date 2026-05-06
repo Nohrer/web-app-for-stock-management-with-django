@@ -38,13 +38,23 @@
           {{ demande_form.date }}
         </div>
         <div>
-          <label class="mb-2 block text-sm font-semibold text-slate-700">Catégorie</label>
-          {{ demande_form.categorie }}
-        </div>
-        <div>
           <label class="mb-2 block text-sm font-semibold text-slate-700">Délai maximum</label>
           {{ demande_form.delai_max_jours }}
         </div>
+      </div>
+      <div class="mt-5">
+        <label class="mb-3 block text-sm font-semibold text-slate-700">Catégories</label>
+        <!-- Selected categories as removable chips -->
+        <div id="selected-chips" class="mb-4 flex flex-wrap gap-2">
+          <!-- Chips will be populated by JS -->
+        </div>
+        <!-- Clickable category buttons -->
+        <div id="category-list" class="grid grid-cols-3 gap-2">
+          <!-- Categories will be populated by JS -->
+        </div>
+        <!-- Hidden multi-select to store selected category IDs for form submission -->
+        <div class="hidden">{{ demande_form.categories }}</div>
+        <div class="hidden">{{ demande_form.categorie }}</div>
       </div>
       <div class="mt-5">
         <label class="mb-2 block text-sm font-semibold text-slate-700">Objet de l'email</label>
@@ -135,41 +145,128 @@
     </div>
   </section>
 
-  <div class="flex justify-center">
-    <button type="submit" class="w-full rounded-full bg-sky-950 px-8 py-4 text-sm font-semibold uppercase tracking-wide text-white shadow-lg hover:bg-sky-900 transition lg:w-1/2">
-      Enregistrer et envoyer
+  <div class="flex justify-center gap-4">
+    <button type="submit" name="action" value="save" class="w-1/2 rounded-full bg-amber-500 px-8 py-4 text-sm font-semibold uppercase tracking-wide text-white shadow-lg hover:bg-amber-600 transition lg:w-1/4">
+      Enregistrer (Brouillon)
+    </button>
+    <button type="submit" name="action" value="send" class="w-1/2 rounded-full bg-sky-950 px-8 py-4 text-sm font-semibold uppercase tracking-wide text-white shadow-lg hover:bg-sky-900 transition lg:w-1/4">
+      Envoyer (Email)
     </button>
   </div>
 </form>
 
 <script>
-  const categorySelect = document.getElementById('id_categorie');
+  const categorySelect = document.getElementById('id_categories');
   const addMoreBtn = document.getElementById('addMore');
   const formCopyTarget = document.getElementById('form-list');
   const totalNewForms = document.getElementById('id_lignes-TOTAL_FORMS');
   const suppliersTable = document.getElementById('suppliers-table');
   const suppliersBody = document.getElementById('suppliers-body');
   const fournisseursCheckboxes = document.querySelector('input[name="demande_form-fournisseurs"]');
+  const suppliersApi = "{% url 'transactions:api_suppliers_by_category' %}";
+  const productsApi = "{% url 'transactions:api_products_by_category' %}";
+  const categoryList = document.getElementById('category-list');
+  const selectedChips = document.getElementById('selected-chips');
 
   // Initialize event listeners
-  categorySelect.addEventListener('change', updateSuppliersList);
-  categorySelect.addEventListener('change', updateProductsList);
   addMoreBtn.addEventListener('click', add_new_form);
   formCopyTarget.addEventListener('click', handleFormDelete);
 
-  // Update suppliers when category changes
+  // Initialize chip-based category selector
+  function initializeCategoryChips() {
+    const allCategories = {{ categories_json|safe }};
+    
+    // Render clickable category buttons
+    categoryList.innerHTML = allCategories.map(cat => `
+      <button type="button" data-category-id="${cat.id}" class="category-btn rounded-full border-2 border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-amber-50 hover:border-amber-400 transition">
+        ${cat.nom}
+      </button>
+    `).join('');
+
+    // Add click listeners to category buttons
+    document.querySelectorAll('.category-btn').forEach(btn => {
+      btn.addEventListener('click', function(e) {
+        e.preventDefault();
+        const categoryId = this.getAttribute('data-category-id');
+        addCategoryChip(categoryId);
+      });
+    });
+
+    // Render initial chips if any categories were selected
+    renderChips();
+  }
+
+  function addCategoryChip(categoryId) {
+    const currentValues = Array.from(categorySelect.selectedOptions).map(o => o.value);
+    if (!currentValues.includes(categoryId)) {
+      // Add the category to the select
+      Array.from(categorySelect.options).forEach(option => {
+        if (option.value === categoryId) {
+          option.selected = true;
+        }
+      });
+      renderChips();
+      updateSuppliersList();
+      updateProductsList();
+    }
+  }
+
+  function removeCategoryChip(categoryId) {
+    const currentValues = Array.from(categorySelect.selectedOptions).map(o => o.value);
+    if (currentValues.includes(categoryId)) {
+      Array.from(categorySelect.options).forEach(option => {
+        if (option.value === categoryId) {
+          option.selected = false;
+        }
+      });
+      renderChips();
+      updateSuppliersList();
+      updateProductsList();
+    }
+  }
+
+  function renderChips() {
+    const selected = Array.from(categorySelect.selectedOptions);
+    const allCategories = {{ categories_json|safe }};
+    
+    selectedChips.innerHTML = selected.map(option => {
+      const cat = allCategories.find(c => c.id == option.value);
+      return `
+        <div class="inline-flex items-center gap-2 rounded-full bg-amber-100 px-3 py-2 text-sm font-semibold text-amber-900">
+          ${cat ? cat.nom : 'Catégorie'}
+          <button type="button" data-category-id="${option.value}" class="remove-chip ml-1 text-amber-900 hover:text-red-600 transition">
+            <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path>
+            </svg>
+          </button>
+        </div>
+      `;
+    }).join('');
+
+    // Add click listeners to remove buttons
+    document.querySelectorAll('.remove-chip').forEach(btn => {
+      btn.addEventListener('click', function(e) {
+        e.preventDefault();
+        const categoryId = this.getAttribute('data-category-id');
+        removeCategoryChip(categoryId);
+      });
+    });
+  }
+
+  // Update suppliers when category changes (supports multiple categories)
   function updateSuppliersList() {
-    const categoryId = categorySelect.value;
-    if (!categoryId) {
+    const selected = Array.from(categorySelect.selectedOptions).map(o => o.value).filter(Boolean);
+    if (selected.length === 0) {
       suppliersBody.innerHTML = '<tr><td colspan="4" class="px-2 py-2 text-center text-slate-400">Sélectionnez une catégorie pour voir les fournisseurs disponibles.</td></tr>';
       return;
     }
 
-    fetch(`/transactions/api/suppliers-by-category/?category_id=${categoryId}`)
+    const query = selected.join(',');
+    fetch(`${suppliersApi}?category_ids=${query}`)
       .then(response => response.json())
       .then(data => {
         if (data.suppliers.length === 0) {
-          suppliersBody.innerHTML = '<tr><td colspan="4" class="px-2 py-2 text-center text-slate-400">Aucun fournisseur disponible pour cette catégorie.</td></tr>';
+          suppliersBody.innerHTML = '<tr><td colspan="4" class="px-2 py-2 text-center text-slate-400">Aucun fournisseur disponible pour ces catégories.</td></tr>';
           return;
         }
 
@@ -188,12 +285,13 @@
       .catch(error => console.error('Error:', error));
   }
 
-  // Update products when category changes
+  // Update products when categories change (supports multiple categories)
   function updateProductsList() {
-    const categoryId = categorySelect.value;
-    if (!categoryId) return;
+    const selected = Array.from(categorySelect.selectedOptions).map(o => o.value).filter(Boolean);
+    if (selected.length === 0) return;
 
-    fetch(`/transactions/api/products-by-category/?category_id=${categoryId}`)
+    const query = selected.join(',');
+    fetch(`${productsApi}?category_ids=${query}`)
       .then(response => response.json())
       .then(data => {
         // Update the product select fields
@@ -275,8 +373,9 @@
     }
   }
 
-  // Initialize on page load if a category is already selected
-  if (categorySelect.value) {
+  // Initialize on page load
+  initializeCategoryChips();
+  if (Array.from(categorySelect.selectedOptions).length) {
     updateSuppliersList();
     updateProductsList();
   }
