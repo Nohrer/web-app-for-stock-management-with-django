@@ -1,0 +1,284 @@
+{% extends page_temp %}
+{% block title %}Demande fournisseur{% endblock %}
+{% block header %}Demande fournisseur{% endblock %}
+{% block main %}
+{% if messages %}
+  <ul class="messages mb-4">
+    {% for message in messages %}
+    <div class="flex items-center bg-sky-600 text-white text-sm font-bold px-4 py-3 rounded-md mb-3" role="alert">
+      <li{% if message.tags %} class="{{ message.tags }}"{% endif %}>{{ message }}</li>
+    </div>
+    {% endfor %}
+  </ul>
+{% endif %}
+
+<div class="mb-6 flex items-center justify-between gap-4">
+  <div>
+    <h1 class="text-3xl font-bold text-sky-950">Choisir les fournisseurs</h1>
+    <p class="mt-2 text-slate-500">Filtre par catégorie, délai et prix, puis envoie la demande avec les quantités requises.</p>
+  </div>
+  <div class="flex gap-3">
+    <a href="{% url 'transactions:historique_fournisseurs' %}" class="rounded-full border border-slate-300 px-5 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition">
+      Historique
+    </a>
+    <a href="{% url 'transactions:create_fournisseur' %}" class="rounded-full border border-sky-950 px-5 py-3 text-sm font-semibold text-sky-950 hover:bg-sky-950 hover:text-white transition">
+      Gérer les fournisseurs
+    </a>
+  </div>
+</div>
+
+<form method="post" class="space-y-6" id="request-form">
+  {% csrf_token %}
+  <div class="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
+    <section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-lg">
+      <h2 class="mb-4 text-xl font-bold text-sky-950">Critères de la demande</h2>
+      <div class="grid gap-5 md:grid-cols-2">
+        <div>
+          <label class="mb-2 block text-sm font-semibold text-slate-700">Date</label>
+          {{ demande_form.date }}
+        </div>
+        <div>
+          <label class="mb-2 block text-sm font-semibold text-slate-700">Catégorie</label>
+          {{ demande_form.categorie }}
+        </div>
+        <div>
+          <label class="mb-2 block text-sm font-semibold text-slate-700">Délai maximum</label>
+          {{ demande_form.delai_max_jours }}
+        </div>
+      </div>
+      <div class="mt-5">
+        <label class="mb-2 block text-sm font-semibold text-slate-700">Objet de l'email</label>
+        {{ demande_form.objet }}
+      </div>
+      <div class="mt-5">
+        <label class="mb-2 block text-sm font-semibold text-slate-700">Message</label>
+        {{ demande_form.message }}
+      </div>
+    </section>
+
+    <aside class="rounded-3xl border border-sky-950 bg-sky-950 p-6 text-white shadow-lg">
+      <h2 class="mb-2 text-xl font-bold">Fournisseurs retenus</h2>
+      <p class="mb-4 text-sm text-slate-300">Sélectionnez les fournisseurs correspondant aux critères. La table affiche l'historique des transactions.</p>
+      
+      <!-- Suppliers Table with Transaction History -->
+      <div class="mb-4 rounded-lg border border-sky-700 bg-sky-900 p-3 overflow-x-auto">
+        <table class="w-full text-xs" id="suppliers-table">
+          <thead>
+            <tr class="border-b border-sky-700">
+              <th class="px-2 py-2 text-left text-amber-300">Sélectionner</th>
+              <th class="px-2 py-2 text-left text-amber-300">Fournisseur</th>
+              <th class="px-2 py-2 text-center text-amber-300">Délai (j)</th>
+              <th class="px-2 py-2 text-center text-amber-300">Transactions</th>
+            </tr>
+          </thead>
+          <tbody id="suppliers-body">
+            {% if demande_form.fournisseurs %}
+              {% for supplier in demande_form.fournisseurs %}
+                <tr class="border-b border-sky-700 hover:bg-sky-800">
+                  <td class="px-2 py-2">{{ supplier }}</td>
+                  <td class="px-2 py-2">{{ supplier.label }}</td>
+                  <td class="px-2 py-2 text-center">-</td>
+                  <td class="px-2 py-2 text-center">-</td>
+                </tr>
+              {% endfor %}
+            {% else %}
+              <tr>
+                <td colspan="4" class="px-2 py-2 text-center text-slate-400">Sélectionnez une catégorie pour voir les fournisseurs disponibles.</td>
+              </tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+      
+      <p class="mt-4 text-xs text-slate-300">Cochez un ou plusieurs fournisseurs pour recevoir la demande par email.</p>
+    </aside>
+  </div>
+
+  <section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-lg">
+    <div class="flex items-center justify-between gap-4 mb-4">
+      <div>
+        <h2 class="text-xl font-bold text-sky-950">Produits à demander</h2>
+        <p class="mt-1 text-sm text-slate-500">Ajoutez les lignes à envoyer, comme dans le bulletin de commande.</p>
+      </div>
+      <button id="addMore" type="button" class="inline-flex items-center gap-2 rounded-full bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-600 transition">
+        Ajouter une ligne
+      </button>
+    </div>
+
+    <div class="overflow-hidden rounded-2xl border border-slate-200">
+      <table class="w-full">
+        <thead>
+          <tr>
+            <th class="bg-sky-950 px-3 py-3 text-left text-sm font-bold text-amber-300">Produit</th>
+            <th class="bg-sky-950 px-3 py-3 text-left text-sm font-bold text-amber-300">Quantité</th>
+            <th class="bg-sky-950 px-3 py-3 text-left text-sm font-bold text-amber-300">Supprimer</th>
+          </tr>
+        </thead>
+        <tbody id="form-list">
+          {{ formset.management_form }}
+          {% for form in formset %}
+          <tr class="form-number border-t border-slate-100">
+            <td class="px-3 py-3">{{ form.produit }}</td>
+            <td class="px-3 py-3">{{ form.quantite }}</td>
+            <td class="px-3 py-3">
+              <button type="button" class="delete-btn rounded-full bg-red-500 px-4 py-2 text-sm font-semibold text-white hover:bg-red-600 transition">Supprimer</button>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div id="empty-form" class="hidden">
+      {{ formset.empty_form.produit }}
+      {{ formset.empty_form.quantite }}
+    </div>
+  </section>
+
+  <div class="flex justify-center">
+    <button type="submit" class="w-full rounded-full bg-sky-950 px-8 py-4 text-sm font-semibold uppercase tracking-wide text-white shadow-lg hover:bg-sky-900 transition lg:w-1/2">
+      Enregistrer et envoyer
+    </button>
+  </div>
+</form>
+
+<script>
+  const categorySelect = document.getElementById('id_categorie');
+  const addMoreBtn = document.getElementById('addMore');
+  const formCopyTarget = document.getElementById('form-list');
+  const totalNewForms = document.getElementById('id_lignes-TOTAL_FORMS');
+  const suppliersTable = document.getElementById('suppliers-table');
+  const suppliersBody = document.getElementById('suppliers-body');
+  const fournisseursCheckboxes = document.querySelector('input[name="demande_form-fournisseurs"]');
+
+  // Initialize event listeners
+  categorySelect.addEventListener('change', updateSuppliersList);
+  categorySelect.addEventListener('change', updateProductsList);
+  addMoreBtn.addEventListener('click', add_new_form);
+  formCopyTarget.addEventListener('click', handleFormDelete);
+
+  // Update suppliers when category changes
+  function updateSuppliersList() {
+    const categoryId = categorySelect.value;
+    if (!categoryId) {
+      suppliersBody.innerHTML = '<tr><td colspan="4" class="px-2 py-2 text-center text-slate-400">Sélectionnez une catégorie pour voir les fournisseurs disponibles.</td></tr>';
+      return;
+    }
+
+    fetch(`/transactions/api/suppliers-by-category/?category_id=${categoryId}`)
+      .then(response => response.json())
+      .then(data => {
+        if (data.suppliers.length === 0) {
+          suppliersBody.innerHTML = '<tr><td colspan="4" class="px-2 py-2 text-center text-slate-400">Aucun fournisseur disponible pour cette catégorie.</td></tr>';
+          return;
+        }
+
+        const currentFournisseurIds = Array.from(document.querySelectorAll('input[name="fournisseurs"]:checked')).map(cb => parseInt(cb.value));
+        suppliersBody.innerHTML = data.suppliers.map(supplier => `
+          <tr class="border-b border-sky-700 hover:bg-sky-800">
+            <td class="px-2 py-2">
+              <input type="checkbox" name="fournisseurs" value="${supplier.id}" ${currentFournisseurIds.includes(supplier.id) ? 'checked' : ''} class="rounded border-sky-600 text-amber-500 focus:ring-amber-500">
+            </td>
+            <td class="px-2 py-2 text-sm">${supplier.nom}</td>
+            <td class="px-2 py-2 text-center text-sm">${supplier.delai_livraison_jours}</td>
+            <td class="px-2 py-2 text-center text-sm"><span class="bg-sky-700 px-2 py-1 rounded">${supplier.transaction_count}</span></td>
+          </tr>
+        `).join('');
+      })
+      .catch(error => console.error('Error:', error));
+  }
+
+  // Update products when category changes
+  function updateProductsList() {
+    const categoryId = categorySelect.value;
+    if (!categoryId) return;
+
+    fetch(`/transactions/api/products-by-category/?category_id=${categoryId}`)
+      .then(response => response.json())
+      .then(data => {
+        // Update the product select fields
+        const productSelects = document.querySelectorAll('select[name*="produit"]');
+        productSelects.forEach(select => {
+          const currentValue = select.value;
+          select.innerHTML = '<option value="">-- Sélectionner un produit --</option>' + 
+            data.products.map(product => `<option value="${product.id}" ${currentValue == product.id ? 'selected' : ''}>${product.libelle}</option>`).join('');
+        });
+      })
+      .catch(error => console.error('Error:', error));
+  }
+
+  function add_new_form(e) {
+    e.preventDefault();
+
+    const currentNumberForm = document.getElementsByClassName('form-number');
+    let currentFormCounts = currentNumberForm.length;
+
+    const copyEmptyFormEl = document.createElement('tr');
+    const emptyFormInputs = document.getElementById('empty-form').querySelectorAll('input, select');
+
+    emptyFormInputs.forEach((el) => {
+      const clonedInput = el.cloneNode(true);
+      clonedInput.setAttribute('class', 'w-full rounded-md border-slate-300 shadow-sm focus:border-sky-500 focus:ring-sky-500');
+      clonedInput.value = '';
+
+      const tdEl = document.createElement('td');
+      tdEl.setAttribute('class', 'px-3 py-3');
+      tdEl.appendChild(clonedInput);
+
+      copyEmptyFormEl.appendChild(tdEl);
+    });
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.setAttribute('type', 'button');
+    deleteBtn.setAttribute('class', 'delete-btn rounded-full bg-red-500 px-4 py-2 text-sm font-semibold text-white hover:bg-red-600 transition');
+    deleteBtn.textContent = 'Supprimer';
+
+    const deleteBtnTd = document.createElement('td');
+    deleteBtnTd.setAttribute('class', 'px-3 py-3');
+    deleteBtnTd.appendChild(deleteBtn);
+    copyEmptyFormEl.appendChild(deleteBtnTd);
+
+    const trEl = document.createElement('tr');
+    trEl.setAttribute('class', 'form-number border-t border-slate-100');
+    trEl.setAttribute('id', `form-${currentFormCounts}`);
+    trEl.appendChild(copyEmptyFormEl);
+
+    const regex = new RegExp('__prefix__', 'g');
+    trEl.innerHTML = trEl.innerHTML.replace(regex, currentFormCounts);
+    totalNewForms.setAttribute('value', currentFormCounts + 1);
+
+    formCopyTarget.append(trEl);
+    
+    // Update the newly added product select with filtered products
+    updateProductsList();
+  }
+
+  function handleFormDelete(e) {
+    if (e.target.classList.contains('delete-btn')) {
+      const formNumber = e.target.closest('.form-number');
+      formNumber.remove();
+
+      const formNumbers = document.getElementsByClassName('form-number');
+      Array.from(formNumbers).forEach((form, index) => {
+        form.setAttribute('id', `form-${index}`);
+        const formInputs = form.querySelectorAll('input, select');
+        formInputs.forEach((input) => {
+          const inputName = input.getAttribute('name');
+          if (inputName) {
+            const newInputName = inputName.replace(/-\d+-/g, `-${index}-`);
+            input.setAttribute('name', newInputName);
+          }
+        });
+      });
+
+      totalNewForms.setAttribute('value', formNumbers.length);
+    }
+  }
+
+  // Initialize on page load if a category is already selected
+  if (categorySelect.value) {
+    updateSuppliersList();
+    updateProductsList();
+  }
+</script>
+{% endblock %}

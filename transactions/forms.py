@@ -1,6 +1,15 @@
 from django.forms import ModelForm, inlineformset_factory
 
-from .models import Bulletin_de_commande, DemandeDeProduit, Bonne_livraison, EntreeDeProduit, type_bl, Fournisseur
+from .models import (
+    Bulletin_de_commande,
+    DemandeDeProduit,
+    Bonne_livraison,
+    EntreeDeProduit,
+    type_bl,
+    Fournisseur,
+    DemandeApprovisionnement,
+    DemandeApprovisionnementLigne,
+)
 from produit.models import Categorie
 from users.models import Employee
 from django import forms
@@ -127,4 +136,85 @@ class DateRangeForm(forms.Form):
 class FournisseurForm(forms.ModelForm):
     class Meta:
         model = Fournisseur
-        fields = ('nom', 'adresse', 'telephone')
+        fields = (
+            'nom',
+            'adresse',
+            'telephone',
+            'email',
+            'categories',
+            'delai_livraison_jours',
+            'prix_reference',
+            'note',
+        )
+        widgets = {
+            'nom': forms.TextInput(attrs={'class': 'w-full rounded-xl border-slate-300 shadow-sm focus:border-sky-500 focus:ring-sky-500'}),
+            'adresse': forms.TextInput(attrs={'class': 'w-full rounded-xl border-slate-300 shadow-sm focus:border-sky-500 focus:ring-sky-500'}),
+            'telephone': forms.TextInput(attrs={'class': 'w-full rounded-xl border-slate-300 shadow-sm focus:border-sky-500 focus:ring-sky-500'}),
+            'email': forms.EmailInput(attrs={'class': 'w-full rounded-xl border-slate-300 shadow-sm focus:border-sky-500 focus:ring-sky-500'}),
+            'delai_livraison_jours': forms.NumberInput(attrs={'class': 'w-full rounded-xl border-slate-300 shadow-sm focus:border-sky-500 focus:ring-sky-500'}),
+            'prix_reference': forms.NumberInput(attrs={'class': 'w-full rounded-xl border-slate-300 shadow-sm focus:border-sky-500 focus:ring-sky-500', 'step': '0.01'}),
+            'note': forms.Textarea(attrs={'rows': 4, 'class': 'w-full rounded-xl border-slate-300 shadow-sm focus:border-sky-500 focus:ring-sky-500'}),
+            'categories': forms.CheckboxSelectMultiple(),
+        }
+
+
+class DemandeApprovisionnementForm(forms.ModelForm):
+    categories = forms.ModelMultipleChoiceField(
+        queryset=Categorie.objects.all(),
+        required=False,
+        widget=forms.SelectMultiple(attrs={'class': 'w-full rounded-xl border-slate-300 shadow-sm', 'id': 'id_categories'}),
+    )
+    fournisseurs = forms.ModelMultipleChoiceField(
+        queryset=Fournisseur.objects.none(),
+        required=False,
+        widget=forms.CheckboxSelectMultiple(),
+    )
+
+    class Meta:
+        model = DemandeApprovisionnement
+        fields = (
+            'date',
+            'categorie',
+            'delai_max_jours',
+            'objet',
+            'message',
+            'fournisseurs',
+        )
+        widgets = {
+            'date': forms.DateInput(attrs={'type': 'date', 'class': 'w-full rounded-xl border-slate-300 shadow-sm focus:border-sky-500 focus:ring-sky-500'}),
+            'categorie': forms.Select(attrs={'class': 'w-full rounded-xl border-slate-300 shadow-sm focus:border-sky-500 focus:ring-sky-500', 'id': 'id_categorie'}),
+            'delai_max_jours': forms.NumberInput(attrs={'class': 'w-full rounded-xl border-slate-300 shadow-sm focus:border-sky-500 focus:ring-sky-500'}),
+            'objet': forms.TextInput(attrs={'class': 'w-full rounded-xl border-slate-300 shadow-sm focus:border-sky-500 focus:ring-sky-500'}),
+            'message': forms.Textarea(attrs={'rows': 4, 'class': 'w-full rounded-xl border-slate-300 shadow-sm focus:border-sky-500 focus:ring-sky-500'}),
+            'fournisseurs': forms.CheckboxSelectMultiple(),
+        }
+
+    def __init__(self, *args, fournisseurs_queryset=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['fournisseurs'].queryset = fournisseurs_queryset or Fournisseur.objects.none()
+        # if the form was initialized with an instance, populate categories initial
+        if self.instance and self.instance.pk:
+            try:
+                self.fields['categories'].initial = [self.instance.categorie.pk]
+            except Exception:
+                self.fields['categories'].initial = []
+
+
+class DemandeApprovisionnementLigneForm(forms.ModelForm):
+    class Meta:
+        model = DemandeApprovisionnementLigne
+        fields = ('produit', 'quantite')
+        widgets = {
+            'produit': forms.Select(attrs={'class': 'w-full rounded-xl border-slate-300 shadow-sm focus:border-sky-500 focus:ring-sky-500'}),
+            'quantite': forms.NumberInput(attrs={'class': 'w-full rounded-xl border-slate-300 shadow-sm focus:border-sky-500 focus:ring-sky-500'}),
+        }
+
+
+DemandeApprovisionnementLigneFormSet = inlineformset_factory(
+    DemandeApprovisionnement,
+    DemandeApprovisionnementLigne,
+    form=DemandeApprovisionnementLigneForm,
+    fields=('produit', 'quantite'),
+    extra=1,
+    can_delete=False,
+)

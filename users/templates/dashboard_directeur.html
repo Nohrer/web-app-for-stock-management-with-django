@@ -12,10 +12,14 @@
   <div
     class="w-full bg-sky-950 relative flex flex-col py-5 items-center justify-center"
   >
-    <img src="{% static 'users/logo.png'%}" alt="logo" class="w-20  " />
-    <p class=" mt-2 text-center	uppercase	font-semibold text-l text-white">
-      Conseil De La Prefecture <br />
-      D'Oujda Angad
+    <div class="mb-3 flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 text-2xl font-black text-sky-950 shadow-lg">
+      SF
+    </div>
+    <p class="mt-2 text-center text-sm font-semibold uppercase tracking-[0.25em] text-white">
+      StockFlow
+    </p>
+    <p class="text-center text-xs text-slate-300">
+      Gestion des achats et du stock
     </p>
   </div>
 
@@ -90,6 +94,30 @@
         </svg>
 
         Bulletin de commande
+      </a>
+    </li>
+    <li class="w-full rounded-md group">
+      <a
+        href="{% url 'transactions:demande_fournisseur' %}"
+        class="inline-flex w-full gap-2 h-full items-center py-3 pl-4 text-lg leading-5 transition duration-200 ease-in-out focus:outline-none border-transparent   font-medium text-amber-400 group-hover:text-sky-950 group-hover:bg-amber-400"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 9.75h7.5m-7.5 3h4.5m2.25 9l-3.75-3.75H5.25A2.25 2.25 0 013 16.5v-10.5A2.25 2.25 0 015.25 3.75h13.5A2.25 2.25 0 0121 6v7.5A2.25 2.25 0 0118.75 15h-1.5M12 20.25a.75.75 0 100-1.5.75.75 0 000 1.5z" />
+        </svg>
+
+        Choisir les fournisseurs
+      </a>
+    </li>
+    <li class="w-full rounded-md group">
+      <a
+        href="{% url 'transactions:historique_fournisseurs' %}"
+        class="inline-flex w-full gap-2 h-full items-center py-3 pl-4 text-lg leading-5 transition duration-200 ease-in-out focus:outline-none border-transparent   font-medium text-amber-400 group-hover:text-sky-950 group-hover:bg-amber-400"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6l4 2m6-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+
+        Historique fournisseurs
       </a>
     </li>
 

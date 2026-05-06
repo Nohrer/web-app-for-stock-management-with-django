@@ -1,8 +1,19 @@
 from django.contrib import admin
-from .models import Fournisseur,  Bulletin_de_commande, DemandeDeProduit, EntreeDeProduit, Bonne_livraison, type_bl
+from .models import Fournisseur,  Bulletin_de_commande, DemandeDeProduit, EntreeDeProduit, Bonne_livraison, type_bl, DemandeApprovisionnement, DemandeApprovisionnementLigne
 
 admin.site.register(Fournisseur)
 admin.site.register(type_bl)
+
+
+class DemandeApprovisionnementLigneInline(admin.TabularInline):
+    model = DemandeApprovisionnementLigne
+    extra = 1
+
+
+@admin.register(DemandeApprovisionnement)
+class DemandeApprovisionnementAdmin(admin.ModelAdmin):
+    filter_horizontal = ('fournisseurs',)
+    inlines = [DemandeApprovisionnementLigneInline]
 
 
 class DemandeDeProduitInline(admin.TabularInline):

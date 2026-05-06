@@ -1,19 +1,37 @@
 from django.urls import reverse
 from django.template.loader import get_template
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render, redirect
-from .models import Bulletin_de_commande, DemandeDeProduit, Bonne_livraison, EntreeDeProduit
+from .models import (
+    Bulletin_de_commande,
+    DemandeDeProduit,
+    Bonne_livraison,
+    EntreeDeProduit,
+    DemandeApprovisionnement,
+)
 from django.forms import inlineformset_factory
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_POST, require_GET
 from django.contrib import messages
-from produit.models import Produit
+from produit.models import Produit, Categorie
 from users.models import Employee
-from django.db.models import Q
-from .forms import BulletinForm, EntreeDeProduitFormSet, BonForm, DateRangeForm,FournisseurForm
+from django.db.models import Q, Count
+from django.utils import timezone
+from django.conf import settings
+from django.core.mail import EmailMessage
+from .forms import (
+    BulletinForm,
+    EntreeDeProduitFormSet,
+    BonForm,
+    DateRangeForm,
+    FournisseurForm,
+    DemandeApprovisionnementForm,
+    DemandeApprovisionnementLigneFormSet,
+)
 from django.shortcuts import get_object_or_404
 from django.contrib.auth.decorators import login_required,user_passes_test
 from django.core.paginator import Paginator
 from django.db.models import Sum
+from .models import Fournisseur
 
 
 
@@ -23,7 +41,8 @@ from django.db.models import Sum
 def create_fournisseur(request):
     employe = Employee.objects.get(user=request.user)
     nom = employe.nom
-    prenom = employe.prenom 
+    prenom = employe.prenom
+    suppliers = Fournisseur.objects.all().order_by('nom')
     if request.method == 'POST':
         form = FournisseurForm(request.POST)
         if form.is_valid():
@@ -34,7 +53,255 @@ def create_fournisseur(request):
             messages.error(request, 'Veuillez corriger les erreurs ci-dessous.')
     else:
         form = FournisseurForm()
-    return render(request, 'fournisseur_create.html', {'form': form,'nom':nom,'prenom':prenom})
+    return render(request, 'fournisseur_create.html', {'form': form,'nom':nom,'prenom':prenom, 'suppliers': suppliers})
+
+
+def _send_supply_request_email(demande, employee_name):
+    if not settings.DEFAULT_FROM_EMAIL:
+        from_email = getattr(settings, 'EMAIL_HOST_USER', 'noreply@stock.local')
+    else:
+        from_email = settings.DEFAULT_FROM_EMAIL
+
+    product_lines = [
+        f"- {ligne.produit.libelle} x {ligne.quantite}"
+        for ligne in demande.lignes.select_related('produit').all()
+    ]
+    supplier_lines = []
+    for fournisseur in demande.fournisseurs.all():
+        supplier_lines.append(
+            f"- {fournisseur.nom} | delai: {fournisseur.delai_livraison_jours} jours | prix ref: {fournisseur.prix_reference}"
+        )
+
+    body = [
+        f"Bonjour {demande.fournisseurs.first().nom if demande.fournisseurs.exists() else 'partenaire'},",
+        '',
+        f"Une nouvelle demande d'approvisionnement a été préparée par {employee_name}.",
+        f"Catégorie cible: {demande.categorie.nom}",
+        f"Délai maximal souhaité: {demande.delai_max_jours or 'non précisé'} jours",
+        '',
+        'Produits demandés:',
+        *product_lines,
+        '',
+        'Fournisseurs sélectionnés:',
+        *supplier_lines,
+        '',
+        f"Message: {demande.message or 'Aucun message complémentaire.'}",
+    ]
+
+    sent_count = 0
+    for fournisseur in demande.fournisseurs.all():
+        if not fournisseur.email:
+            continue
+        email = EmailMessage(
+            subject=demande.objet,
+            body='\n'.join(body),
+            from_email=from_email,
+            to=[fournisseur.email],
+        )
+        email.send(fail_silently=False)
+        sent_count += 1
+    return sent_count
+
+
+@login_required
+@user_passes_test(lambda user: user.is_directeur or user.is_magasinier)
+def demande_fournisseur(request):
+    employe = Employee.objects.filter(user=request.user).first()
+    if employe.user.is_directeur:
+        page_temp = 'dashboard_directeur.html'
+    else:
+        page_temp = 'dashboard.html'
+
+    nom = employe.nom
+    prenom = employe.prenom
+
+    # allow multiple categories selection (sent as categories[])
+    selected_categories = request.POST.getlist('categories') or request.GET.getlist('categories')
+    fournisseurs_qs = Fournisseur.objects.all().order_by('delai_livraison_jours', 'prix_reference', 'nom')
+
+    if selected_categories:
+        fournisseurs_qs = fournisseurs_qs.filter(categories__id__in=selected_categories).distinct()
+
+    selected_delai = request.POST.get('delai_max_jours') or request.GET.get('delai_max_jours')
+
+    if selected_delai:
+        fournisseurs_qs = fournisseurs_qs.filter(delai_livraison_jours__lte=selected_delai)
+
+    fournisseurs_qs = fournisseurs_qs.distinct().order_by('delai_livraison_jours', 'prix_reference', 'nom')
+
+    if request.method == 'POST':
+        action = request.POST.get('action')
+        demande_form = DemandeApprovisionnementForm(
+            request.POST,
+            fournisseurs_queryset=fournisseurs_qs,
+        )
+        formset = DemandeApprovisionnementLigneFormSet(
+            request.POST,
+            instance=DemandeApprovisionnement(),
+            prefix='lignes',
+        )
+
+        if demande_form.is_valid() and formset.is_valid():
+            demande = demande_form.save(commit=False)
+            # derive primary category from categories selection if provided
+            selected_cats = demande_form.cleaned_data.get('categories') or []
+            if selected_cats:
+                demande.categorie = selected_cats[0]
+            # default etat handling: saved but not sent
+            if action == 'send':
+                demande.etat = 'sent'
+            else:
+                demande.etat = 'created'
+
+            demande.email_envoye = False
+            demande.save()
+            demande_form.save_m2m()
+            formset.instance = demande
+            formset.save()
+
+            sent_count = 0
+            if action == 'send':
+                sent_count = _send_supply_request_email(
+                    demande,
+                    f'{nom} {prenom}',
+                )
+                demande.email_envoye = sent_count > 0
+                demande.etat = 'sent' if sent_count else demande.etat
+                demande.save(update_fields=['email_envoye', 'etat'])
+
+            if action == 'send' and sent_count:
+                messages.success(request, f'Demande enregistrée et {sent_count} email(s) envoyé(s).')
+            elif action == 'send' and not sent_count:
+                messages.warning(request, 'Demande enregistrée, mais aucun fournisseur avec email valide n\'a été trouvé.')
+            else:
+                messages.success(request, 'Demande enregistrée (brouillon).')
+
+            return redirect('transactions:demande_fournisseur')
+
+        messages.error(request, 'Veuillez corriger les erreurs du formulaire.')
+    else:
+        initial = {
+            'date': timezone.now().date(),
+        }
+        if selected_categorie:
+            initial['categorie'] = selected_categorie
+        if fournisseurs_qs.exists():
+            initial['fournisseurs'] = list(fournisseurs_qs.values_list('pk', flat=True))
+
+        demande_form = DemandeApprovisionnementForm(
+            initial=initial,
+            fournisseurs_queryset=fournisseurs_qs,
+        )
+        formset = DemandeApprovisionnementLigneFormSet(
+            instance=DemandeApprovisionnement(),
+            prefix='lignes',
+        )
+
+    return render(
+        request,
+        'demande_fournisseur.html',
+        {
+            'demande_form': demande_form,
+            'formset': formset,
+            'fournisseurs': fournisseurs_qs,
+            'categories': Categorie.objects.all(),
+            'nom': nom,
+            'prenom': prenom,
+            'page_temp': page_temp,
+        },
+    )
+
+
+@login_required
+@user_passes_test(lambda user: user.is_directeur or user.is_magasinier)
+def historique_fournisseurs(request):
+    employe = Employee.objects.filter(user=request.user).first()
+    if employe.user.is_directeur:
+        page_temp = 'dashboard_directeur.html'
+    else:
+        page_temp = 'dashboard.html'
+
+    nom = employe.nom
+    prenom = employe.prenom
+
+    demandes = DemandeApprovisionnement.objects.select_related('categorie').prefetch_related(
+        'fournisseurs',
+        'lignes__produit',
+    ).order_by('-date', '-pk')
+
+    selected_categorie = request.GET.get('categorie', '')
+    selected_email_envoye = request.GET.get('email_envoye', '')
+
+    if selected_categorie:
+        demandes = demandes.filter(categorie_id=selected_categorie)
+    if selected_email_envoye in {'0', '1'}:
+        demandes = demandes.filter(email_envoye=selected_email_envoye == '1')
+
+    paginator = Paginator(demandes, 8)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    return render(
+        request,
+        'historique_fournisseurs.html',
+        {
+            'page_obj': page_obj,
+            'categories': Categorie.objects.all(),
+            'selected_categorie': selected_categorie,
+            'selected_email_envoye': selected_email_envoye,
+            'nom': nom,
+            'prenom': prenom,
+            'page_temp': page_temp,
+        },
+    )
+
+
+# API ENDPOINTS FOR AJAX
+@login_required
+@require_GET
+def api_suppliers_by_category(request):
+    """API endpoint to get suppliers filtered by category with transaction history."""
+    category_ids = request.GET.get('category_ids') or request.GET.getlist('category_id')
+    if not category_ids:
+        return JsonResponse({'suppliers': []})
+
+    # accept comma-separated or list
+    if isinstance(category_ids, str) and ',' in category_ids:
+        ids = [int(x) for x in category_ids.split(',') if x]
+    elif isinstance(category_ids, str):
+        ids = [int(category_ids)]
+    else:
+        ids = [int(x) for x in category_ids]
+
+    suppliers = Fournisseur.objects.filter(categories__id__in=ids).distinct().annotate(
+        transaction_count=Count('demandes_approvisionnement')
+    ).values(
+        'id', 'nom', 'email', 'delai_livraison_jours', 'prix_reference', 'transaction_count'
+    ).order_by('delai_livraison_jours', 'prix_reference', 'nom')
+
+    return JsonResponse({'suppliers': list(suppliers)})
+
+
+@login_required
+@require_GET
+def api_products_by_category(request):
+    """API endpoint to get products filtered by category."""
+    category_ids = request.GET.get('category_ids') or request.GET.getlist('category_id')
+    if not category_ids:
+        return JsonResponse({'products': []})
+
+    if isinstance(category_ids, str) and ',' in category_ids:
+        ids = [int(x) for x in category_ids.split(',') if x]
+    elif isinstance(category_ids, str):
+        ids = [int(category_ids)]
+    else:
+        ids = [int(x) for x in category_ids]
+
+    products = Produit.objects.filter(categorie_id__in=ids).values('id', 'libelle').order_by('libelle')
+
+    return JsonResponse({'products': list(products)})
+
+
 #BULLETIN
 
 @login_required
