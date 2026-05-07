@@ -84,19 +84,19 @@
   <table class="w-full">
     <thead>
       <tr>
-        <th class="text-start py-4 px-3 text-amber-300 font-bold bg-sky-950 ">
+        <th class="text-start py-2 px-3 text-amber-300 font-bold bg-sky-950 ">
           Etat
         </th>
-        <th class="text-start py-4 px-3 text-amber-300 font-bold bg-sky-950">
+        <th class="text-start py-2 px-3 text-amber-300 font-bold bg-sky-950">
           Date
         </th>
-        <th class="text-start py-4 px-3 text-amber-300 font-bold bg-sky-950">
+        <th class="text-start py-2 px-3 text-amber-300 font-bold bg-sky-950">
           Demandeur
         </th>
-        <th class="text-start py-4 px-3 text-amber-300 font-bold bg-sky-950">
+        <th class="text-start py-2 px-3 text-amber-300 font-bold bg-sky-950">
           Modifier
         </th>
-        <th class="text-start py-4 px-3 text-amber-300 font-bold bg-sky-950">
+        <th class="text-start py-2 px-3 text-amber-300 font-bold bg-sky-950">
           Consulter
         </th>
       </tr>
@@ -132,11 +132,11 @@
         {%else%}
         <td class="py-1 border-b relative"></td>
         {% endif %}
-        <td class="py-3 border-b px-2">{{ bulletin.date }}</td>
-        <td class="py-3 border-b px-2">
+        <td class="py-2 border-b px-2">{{ bulletin.date }}</td>
+        <td class="py-2 border-b px-2 text-sm">
           {{ bulletin.employe.nom }} {{ bulletin.employe.prenom }}
         </td>
-        <td class="py-3 border-bpx-2">
+        <td class="py-2 border-b px-2">
           {% if bulletin.state != 'approver' and bulletin.state != 'supprimer' %}
           <a
             href="{% url 'transactions:bulletin_detail' bulletin.pk %}"
@@ -160,7 +160,7 @@
           <p class='pl-12'>/</p>
           {%endif%}
         </td>
-        <td class="py-3 border-b px-2">
+        <td class="py-2 border-b px-2">
           <a
             href="{% url 'transactions:voir_bulletin' bulletin.pk %}"
             class="flex justify-start pl-10 hover:text-red-400 transition-all"

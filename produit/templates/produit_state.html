@@ -25,17 +25,18 @@
       <input
         type="date"
         name="date"
+        value="{{ selected_date }}"
         class="w-full text-lg  py-2 rounded-md border-transparent focus:border-transparent focus:ring-0 border-slate-300  focus:border-amber-500"       />
     </div>
     <div class="flex justify-center items-center gap-5 ">
       <p class="mr-2 text-gray-700 font-bold">Catégories:</p>
-      {% for categorie in categories %}
-      <div>
-        <input type="checkbox" id="{{ categorie.id }}"class="border-amber-400 rounded-md shadow-sm text-slate-800 focus:text-slate-950"  name="categories" value="{{ categorie.id }}">
-        <label for="{{ categorie.id }}">{{ categorie.nom }}</label>
-      </div>
-    {% endfor %}
-  </div>
+      <select name="categorie_id" class="w-full rounded-xl border-slate-300 shadow-sm focus:border-sky-500 focus:ring-sky-500">
+        <option value="">Toutes les catégories</option>
+        {% for option in category_filter_options %}
+        <option value="{{ option.value }}" {% if option.disabled %}disabled{% endif %} {% if selected_category_id == option.value and not option.disabled %}selected{% endif %}>{{ option.label }}</option>
+        {% endfor %}
+      </select>
+    </div>
      
     </div>
     <div class="flex justify-center my-5">

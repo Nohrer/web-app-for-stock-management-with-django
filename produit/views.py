@@ -81,18 +81,34 @@ def _build_category_filter_options(categories_qs):
 
     categories_by_name = {c.nom: c for c in categories_qs}
     options = []
-    used_names = set()
+    used_ids = set()
+
+    def add_group(header_name, fallback_sub_names):
+        header_category = categories_by_name.get(header_name)
+        if header_category is None:
+            return
+
+        options.append({'value': '', 'label': header_name, 'disabled': True})
+
+        child_categories = list(header_category.subcategories.all().order_by('nom'))
+        for sub_name in fallback_sub_names:
+            fallback_category = categories_by_name.get(sub_name)
+            if fallback_category is not None and fallback_category.parent_id is None:
+                child_categories.append(fallback_category)
+
+        seen_child_ids = set()
+        for category_obj in sorted(child_categories, key=lambda item: item.nom):
+            if category_obj.id in used_ids or category_obj.id in seen_child_ids:
+                continue
+            options.append({'value': str(category_obj.id), 'label': f'  - {category_obj.nom}', 'disabled': False})
+            used_ids.add(category_obj.id)
+            seen_child_ids.add(category_obj.id)
 
     for head, sub_categories in category_hierarchy.items():
-        options.append({'value': '', 'label': head, 'disabled': True})
-        for sub in sub_categories:
-            category_obj = categories_by_name.get(sub)
-            if category_obj is not None:
-                options.append({'value': str(category_obj.id), 'label': f'  - {sub}', 'disabled': False})
-                used_names.add(sub)
+        add_group(head, sub_categories)
 
     # Keep any other categories reachable in the filter.
-    remaining = [c for c in categories_qs if c.nom not in used_names and c.nom not in category_hierarchy]
+    remaining = [c for c in categories_qs if c.id not in used_ids and c.nom not in category_hierarchy]
     if remaining:
         options.append({'value': '', 'label': 'Autres catégories', 'disabled': True})
         for category_obj in remaining:
@@ -186,21 +202,46 @@ def search_product(request):
 
 
 @login_required
-@user_passes_test(lambda user: user.is_magasinier)
+@user_passes_test(lambda user: user.is_magasinier or user.is_directeur)
 def ajouter(request):
+    employee = Employee.objects.get(user=request.user)
+    if employee.user.is_directeur:
+        page_temp = 'dashboard_directeur.html'
+    else:
+        page_temp = 'dashboard.html'
+
     categories = Categorie.objects.all()
+    category_filter_options = _build_category_filter_options(categories.order_by('nom'))
+    main_category_names = [
+        'X.All commodities',
+        'A.Structural Mechanical Piping',
+        'B.Electrical & Instrumentation',
+        'C.Civil Works',
+        'D.Equipment',
+    ]
+    main_categories = Categorie.objects.filter(nom__in=main_category_names).order_by('nom')
     form = ProduitForm()  # Initialize with an empty form
+    selected_category_id = request.POST.get('categorie', '')
 
     if request.method == 'POST':
         if 'ajouter_categorie' in request.POST:
-            # Code for adding a category
+            # Code for adding a category or sub-category
             nom = request.POST.get('nom')
             description = request.POST.get('description')
+            parent_id = request.POST.get('parent_category') or None
             magasin = Magasin.objects.get(id=1)
+            parent = Categorie.objects.filter(pk=parent_id).first() if parent_id else None
             category = Categorie(
-                nom=nom, description=description, magasin=magasin)
+                nom=nom,
+                description=description,
+                magasin=magasin,
+                parent=parent,
+            )
             category.save()
-            messages.success(request, 'Catégorie a été ajoutée!')
+            if parent:
+                messages.success(request, 'Sous-catégorie ajoutée avec succès!')
+            else:
+                messages.success(request, 'Catégorie principale a été ajoutée!')
             return redirect('produit:product_list')
         elif 'ajouter_produit' in request.POST:
             # Code for adding a product
@@ -209,10 +250,18 @@ def ajouter(request):
                 produit = form.save()
                 messages.success(request, 'Produit a été ajouté!')
                 return redirect('produit:product_list')
-    employe = Employee.objects.get(user=request.user)
-    nom = employe.nom
-    prenom = employe.prenom
-    return render(request, 'ajouter_produit.html', {'form': form, 'categories': categories, 'nom': nom, 'prenom': prenom})
+    nom = employee.nom
+    prenom = employee.prenom
+    return render(request, 'ajouter_produit.html', {
+        'form': form,
+        'categories': categories,
+        'category_filter_options': category_filter_options,
+        'main_categories': main_categories,
+        'selected_category_id': str(selected_category_id),
+        'nom': nom,
+        'prenom': prenom,
+        'page_temp': page_temp,
+    })
 
 
 @login_required
@@ -224,22 +273,24 @@ def product_state(request):
     else:
         page_temp='dashboard.html'
     categories = Categorie.objects.all()
+    category_filter_options = _build_category_filter_options(categories)
 
     nom = employee.nom
     prenom = employee.prenom
+    selected_category_id = request.POST.get('categorie_id', '')
+    selected_date = request.POST.get('date', '')
     if request.method == 'POST':
         date = request.POST.get('date')
-        date_str = datetime.strptime(date, '%Y-%m-%d')
-        categories_selected = request.POST.getlist('categories')
         if date:
+            date_str = datetime.strptime(date, '%Y-%m-%d')
             produits = Produit.history.as_of(
                 datetime.strptime(date, '%Y-%m-%d'))
-            if categories_selected:
-                produits = produits.filter(categorie__in=categories_selected)
+            if selected_category_id:
+                produits = produits.filter(categorie_id=selected_category_id)
             context = {'date': date_str, 'produits': produits,
-                       'nom': nom, 'prenom': prenom,'page_temp':page_temp,'categories':categories}
+                       'nom': nom, 'prenom': prenom,'page_temp':page_temp,'categories':categories,'category_filter_options': category_filter_options,'selected_category_id': str(selected_category_id),'selected_date': selected_date}
             return render(request, 'produit_state.html', context)
         else:
-            return render(request, 'produit_state.html', {'nom': nom, 'prenom': prenom,'page_temp':page_temp ,'categories':categories})
+            return render(request, 'produit_state.html', {'nom': nom, 'prenom': prenom,'page_temp':page_temp ,'categories':categories,'category_filter_options': category_filter_options,'selected_category_id': str(selected_category_id),'selected_date': selected_date})
     else:
-        return render(request, 'produit_state.html', {'nom': nom, 'prenom': prenom,'page_temp':page_temp ,'categories':categories})
+        return render(request, 'produit_state.html', {'nom': nom, 'prenom': prenom,'page_temp':page_temp ,'categories':categories,'category_filter_options': category_filter_options,'selected_category_id': str(selected_category_id),'selected_date': selected_date})

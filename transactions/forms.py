@@ -154,7 +154,7 @@ class FournisseurForm(forms.ModelForm):
             'delai_livraison_jours': forms.NumberInput(attrs={'class': 'w-full rounded-xl border-slate-300 shadow-sm focus:border-sky-500 focus:ring-sky-500'}),
             'prix_reference': forms.NumberInput(attrs={'class': 'w-full rounded-xl border-slate-300 shadow-sm focus:border-sky-500 focus:ring-sky-500', 'step': '0.01'}),
             'note': forms.Textarea(attrs={'rows': 4, 'class': 'w-full rounded-xl border-slate-300 shadow-sm focus:border-sky-500 focus:ring-sky-500'}),
-            'categories': forms.CheckboxSelectMultiple(),
+            'categories': forms.SelectMultiple(attrs={'class': 'w-full rounded-xl border-slate-300 shadow-sm focus:border-sky-500 focus:ring-sky-500', 'size': 6}),
         }
 
 

@@ -1,6 +1,6 @@
 {% extends page_temp %}
-{% block title %}Historique fournisseurs{% endblock %}
-{% block header %}Historique fournisseurs{% endblock %}
+{% block title %}Demande Fournisseur{% endblock %}
+{% block header %}Demande Fournisseur{% endblock %}
 {% block main %}
 <div class="mb-6 flex items-center justify-between gap-4">
   <div>
@@ -134,8 +134,8 @@
     <label class="mb-2 block text-sm font-semibold text-slate-700">Catégorie</label>
     <select name="categorie" class="w-full rounded-xl border-slate-300 shadow-sm focus:border-sky-500 focus:ring-sky-500">
       <option value="">Toutes les catégories</option>
-      {% for categorie in categories %}
-      <option value="{{ categorie.id }}" {% if selected_categorie == categorie.id|stringformat:'s' %}selected{% endif %}>{{ categorie.nom }}</option>
+      {% for option in category_filter_options %}
+      <option value="{{ option.value }}" {% if option.disabled %}disabled{% endif %} {% if selected_categorie == option.value and not option.disabled %}selected{% endif %}>{{ option.label }}</option>
       {% endfor %}
     </select>
   </div>

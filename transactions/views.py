@@ -18,8 +18,7 @@ from produit.models import Produit, Categorie
 from users.models import Employee
 from django.db.models import Q, Count
 from django.utils import timezone
-from django.conf import settings
-from django.core.mail import EmailMessage
+from urllib.parse import quote, urlencode
 from .forms import (
     BulletinForm,
     EntreeDeProduitFormSet,
@@ -36,6 +35,105 @@ from django.db.models import Sum
 from .models import Fournisseur
 
 
+def _build_category_filter_options(categories_qs):
+    """Build a single hierarchical category select matching the stock page filter."""
+    category_hierarchy = {
+        'X.All commodities': [
+            'EQUIPEMENT (EQUIPMENT, SERVICE & SPARES)',
+            'ELECTRICITE & INSTRUMENTATION (EQUIPMENT, SERVICE/INSTALLATION & SPARES)',
+            'INDUSTRIAL MAINTENANCE, EXTERNALISATION AND LOGICTICS',
+            'ARCHITECTURAL SERVICES',
+            'LANDSCAPING AND GARDENING',
+            'AUXILIARY MATERIAL AND UTILITIES',
+            'BULK SUPPLY',
+            'IT & TELECOM',
+            'Construction & Buildings',
+            'Equipements (Equipement, Service and Spares)',
+            'Electricity & Instrumentation (Equipement, Service/installation and Spares)',
+            'Industrial Maintenance, Externalisation and Logistics',
+            'Intelectual Services',
+            'Facility Management',
+            'Additives/Auxiliary Material and Utilities',
+            'Bulk supply',
+            'IT & Telecom',
+            'Duplicate Commodities',
+            'SAP Commodities',
+        ],
+        'A.Structural Mechanical Piping': [
+            'SMP General Contracting',
+            'Piping works',
+            'Structural works',
+            'Mechanical works',
+            'Industrial specialities',
+        ],
+        'B.Electrical & Instrumentation': [
+            'Electrical works',
+            'E&I General Contracting',
+        ],
+        'C.Civil Works': [
+            'Earthworks',
+            'Concrete Works',
+            'Building & Structures',
+            'Roads & Infrastructure',
+            'Temporary & Anxillary Works',
+            'Civil General Contracting',
+        ],
+        'D.Equipment': [
+            'Static Equipment',
+            'Rotating Equipment',
+            'Process Equipment',
+            'Air & Gas Systems',
+            'Utilities Equipment',
+            'Lifting Equipment',
+            'Handling Equipment',
+            'Separation Equipment',
+            'Packaged Units & Skids',
+            'Electrical & Power Systems',
+            'Instrumentation & Control Systems',
+            'Piping Materials',
+            'Inspection & Testing Services',
+            'Piping Supervision Services',
+            'Fabrication & Manufacturing Services',
+        ],
+    }
+
+    categories_by_name = {c.nom: c for c in categories_qs}
+    options = []
+    used_ids = set()
+
+    def add_group(header_name, fallback_sub_names):
+        header_category = categories_by_name.get(header_name)
+        if header_category is None:
+            return
+
+        options.append({'value': '', 'label': header_name, 'disabled': True})
+
+        child_categories = list(header_category.subcategories.all().order_by('nom'))
+        for sub_name in fallback_sub_names:
+            fallback_category = categories_by_name.get(sub_name)
+            if fallback_category is not None and fallback_category.parent_id is None:
+                child_categories.append(fallback_category)
+
+        seen_child_ids = set()
+        for category_obj in sorted(child_categories, key=lambda item: item.nom):
+            if category_obj.id in used_ids or category_obj.id in seen_child_ids:
+                continue
+            options.append({'value': str(category_obj.id), 'label': f'  - {category_obj.nom}', 'disabled': False})
+            used_ids.add(category_obj.id)
+            seen_child_ids.add(category_obj.id)
+
+    for head, sub_categories in category_hierarchy.items():
+        add_group(head, sub_categories)
+
+    remaining = [c for c in categories_qs if c.id not in used_ids and c.nom not in category_hierarchy]
+    if remaining:
+        options.append({'value': '', 'label': 'Autres catégories', 'disabled': True})
+        for category_obj in remaining:
+            options.append({'value': str(category_obj.id), 'label': f'  - {category_obj.nom}', 'disabled': False})
+
+    return options
+
+
 
 #FOURNISSEUR
 @login_required
@@ -44,7 +142,15 @@ def create_fournisseur(request):
     employe = Employee.objects.get(user=request.user)
     nom = employe.nom
     prenom = employe.prenom
-    suppliers = Fournisseur.objects.all().order_by('nom')
+    # support search and pagination for the suppliers list
+    q = request.GET.get('q', '').strip()
+    suppliers_qs = Fournisseur.objects.all().order_by('nom')
+    if q:
+        suppliers_qs = suppliers_qs.filter(nom__icontains=q)
+
+    page_number = request.GET.get('page')
+    paginator = Paginator(suppliers_qs, 8)
+    suppliers = paginator.get_page(page_number)
     if request.method == 'POST':
         form = FournisseurForm(request.POST)
         if form.is_valid():
@@ -55,26 +161,87 @@ def create_fournisseur(request):
             messages.error(request, 'Veuillez corriger les erreurs ci-dessous.')
     else:
         form = FournisseurForm()
-    return render(request, 'fournisseur_create.html', {'form': form,'nom':nom,'prenom':prenom, 'suppliers': suppliers})
+
+    return render(request, 'fournisseur_create.html', {
+        'form': form,
+        'nom': nom,
+        'prenom': prenom,
+        'suppliers': suppliers,
+        'q': q,
+        'page_obj': suppliers,
+        'categories': Categorie.objects.all(),
+        'categories_json': list(Categorie.objects.all().values('id', 'nom')),
+    })
 
 
-def _send_supply_request_email(demande, employee_name):
-    if not settings.DEFAULT_FROM_EMAIL:
-        from_email = getattr(settings, 'EMAIL_HOST_USER', 'noreply@stock.local')
+@login_required
+@user_passes_test(lambda user: user.is_magasinier)
+def edit_fournisseur(request, pk):
+    fournisseur = get_object_or_404(Fournisseur, pk=pk)
+    employe = Employee.objects.get(user=request.user)
+    nom = employe.nom
+    prenom = employe.prenom
+
+    # reuse search/pagination for the list on the edit page
+    q = request.GET.get('q', '').strip()
+    suppliers_qs = Fournisseur.objects.all().order_by('nom')
+    if q:
+        suppliers_qs = suppliers_qs.filter(nom__icontains=q)
+    paginator = Paginator(suppliers_qs, 8)
+    page_number = request.GET.get('page')
+    suppliers = paginator.get_page(page_number)
+
+    if request.method == 'POST':
+        form = FournisseurForm(request.POST, instance=fournisseur)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Fournisseur mis à jour avec succès!')
+            return redirect('transactions:create_fournisseur')
+        else:
+            messages.error(request, 'Veuillez corriger les erreurs du formulaire.')
     else:
-        from_email = settings.DEFAULT_FROM_EMAIL
+        form = FournisseurForm(instance=fournisseur)
+
+    return render(request, 'fournisseur_create.html', {
+        'form': form,
+        'nom': nom,
+        'prenom': prenom,
+        'suppliers': suppliers,
+        'q': q,
+        'page_obj': suppliers,
+        'categories': Categorie.objects.all(),
+        'categories_json': list(Categorie.objects.all().values('id', 'nom')),
+    })
+
+
+@login_required
+@user_passes_test(lambda user: user.is_magasinier)
+@require_POST
+def delete_fournisseur(request, pk):
+    fournisseur = get_object_or_404(Fournisseur, pk=pk)
+    try:
+        fournisseur.delete()
+        messages.success(request, 'Fournisseur supprimé.')
+        return JsonResponse({'ok': True})
+    except Exception as e:
+        return JsonResponse({'ok': False, 'error': str(e)}, status=500)
+
+
+def _build_supply_request_mailto(demande, employee_name):
+    supplier_emails = [fournisseur.email for fournisseur in demande.fournisseurs.all() if fournisseur.email]
+    if not supplier_emails:
+        return None
 
     product_lines = [
-        f"- {ligne.produit.libelle} x {ligne.quantite}"
+        f"- {ligne.produit.libelle} ({ligne.produit.categorie.nom}) x {ligne.quantite}"
         for ligne in demande.lignes.select_related('produit').all()
     ]
-    supplier_lines = []
-    for fournisseur in demande.fournisseurs.all():
-        supplier_lines.append(
-            f"- {fournisseur.nom} | delai: {fournisseur.delai_livraison_jours} jours | prix ref: {fournisseur.prix_reference}"
-        )
+    supplier_lines = [
+        f"- {fournisseur.nom} | delai: {fournisseur.delai_livraison_jours} jours | prix ref: {fournisseur.prix_reference} | email: {fournisseur.email or 'N/A'}"
+        for fournisseur in demande.fournisseurs.all()
+    ]
 
-    body = [
+    body = '\n'.join([
         f"Bonjour {demande.fournisseurs.first().nom if demande.fournisseurs.exists() else 'partenaire'},",
         '',
         f"Une nouvelle demande d'approvisionnement a été préparée par {employee_name}.",
@@ -88,21 +255,9 @@ def _send_supply_request_email(demande, employee_name):
         *supplier_lines,
         '',
         f"Message: {demande.message or 'Aucun message complémentaire.'}",
-    ]
+    ])
 
-    sent_count = 0
-    for fournisseur in demande.fournisseurs.all():
-        if not fournisseur.email:
-            continue
-        email = EmailMessage(
-            subject=demande.objet,
-            body='\n'.join(body),
-            from_email=from_email,
-            to=[fournisseur.email],
-        )
-        email.send(fail_silently=False)
-        sent_count += 1
-    return sent_count
+    return f"mailto:{','.join(supplier_emails)}?{urlencode({'subject': demande.objet, 'body': body}, quote_via=quote)}"
 
 
 @login_required
@@ -164,23 +319,33 @@ def demande_fournisseur(request):
             formset.instance = demande
             formset.save()
 
-            sent_count = 0
             if action == 'send':
-                sent_count = _send_supply_request_email(
+                mailto_url = _build_supply_request_mailto(
                     demande,
                     f'{nom} {prenom}',
                 )
-                demande.email_envoye = sent_count > 0
-                demande.etat = 'sent' if sent_count else demande.etat
+                if not mailto_url:
+                    messages.warning(request, 'Demande enregistrée, mais aucun fournisseur avec email valide n\'a été trouvé.')
+                    return redirect('transactions:demande_fournisseur')
+
+                demande.email_envoye = False
+                demande.etat = 'sent'
                 demande.save(update_fields=['email_envoye', 'etat'])
+                messages.success(request, 'Demande enregistrée. Mail Envoyée.')
+                # Return a small HTML page that triggers a client-side navigation
+                # to the mailto: URL. Django disallows server-side redirects to
+                # non-http(s) schemes, so use JS to open the user's mail client.
+                html = (
+                    '<!doctype html><html><head><meta charset="utf-8"><title>Open Mail'
+                    ' Client</title></head><body>'
+                    '<p>Ouverture du client mail...</p>'
+                    f'<p><a href="{mailto_url}" target="_blank" rel="noopener noreferrer">Ouvrir le client mail</a></p>'
+                    '<script>(function(){try{window.open(' + json.dumps(mailto_url) + ', "_blank");}catch(e){window.location.href=' + json.dumps(mailto_url) + ';}})();</script>'
+                    '</body></html>'
+                )
+                return HttpResponse(html)
 
-            if action == 'send' and sent_count:
-                messages.success(request, f'Demande enregistrée et {sent_count} email(s) envoyé(s).')
-            elif action == 'send' and not sent_count:
-                messages.warning(request, 'Demande enregistrée, mais aucun fournisseur avec email valide n\'a été trouvé.')
-            else:
-                messages.success(request, 'Demande enregistrée (brouillon).')
-
+            messages.success(request, 'Demande enregistrée (brouillon).')
             return redirect('transactions:demande_fournisseur')
 
         messages.error(request, 'Veuillez corriger les erreurs du formulaire.')
@@ -239,6 +404,7 @@ def historique_fournisseurs(request):
 
     selected_categorie = request.GET.get('categorie', '')
     selected_email_envoye = request.GET.get('email_envoye', '')
+    category_filter_options = _build_category_filter_options(Categorie.objects.all().order_by('nom'))
 
     if selected_categorie:
         demandes = demandes.filter(categorie_id=selected_categorie)
@@ -255,6 +421,7 @@ def historique_fournisseurs(request):
         {
             'page_obj': page_obj,
             'categories': Categorie.objects.all(),
+            'category_filter_options': category_filter_options,
             'selected_categorie': selected_categorie,
             'selected_email_envoye': selected_email_envoye,
             'nom': nom,
@@ -385,10 +552,25 @@ def edit_demande(request, pk):
             formset.save()
 
             if action == 'send':
-                sent_count = _send_supply_request_email(demande, f"{employe.nom} {employe.prenom}")
-                demande.email_envoye = sent_count > 0
-                demande.etat = 'sent' if sent_count else demande.etat
+                mailto_url = _build_supply_request_mailto(demande, f"{employe.nom} {employe.prenom}")
+                if not mailto_url:
+                    messages.warning(request, 'Demande mise à jour, mais aucun fournisseur avec email valide n\'a été trouvé.')
+                    return redirect('transactions:historique_fournisseurs')
+
+                demande.email_envoye = False
+                demande.etat = 'sent'
                 demande.save(update_fields=['email_envoye', 'etat'])
+                messages.success(request, 'Demande mise à jour. Ouverture du client mail.')
+                # Use a client-side JS redirect to avoid DisallowedRedirect for mailto:
+                html = (
+                    '<!doctype html><html><head><meta charset="utf-8"><title>Open Mail'
+                    ' Client</title></head><body>'
+                    '<p>Ouverture du client mail...</p>'
+                    f'<p><a href="{mailto_url}" target="_blank" rel="noopener noreferrer">Ouvrir le client mail</a></p>'
+                    '<script>(function(){try{window.open(' + json.dumps(mailto_url) + ', "_blank");}catch(e){window.location.href=' + json.dumps(mailto_url) + ';}})();</script>'
+                    '</body></html>'
+                )
+                return HttpResponse(html)
 
             messages.success(request, 'Demande mise à jour.')
             return redirect('transactions:historique_fournisseurs')
@@ -827,11 +1009,14 @@ def date_range(request):
     else:
         page_temp='dashboard.html'
     categories = Categorie.objects.all()
+    category_filter_options = _build_category_filter_options(categories.order_by('nom'))
 
     nom = employee.nom
     prenom = employee.prenom
+    selected_categories = []
     if request.method == 'POST':
         form = DateRangeForm(request.POST)
+        selected_categories = request.POST.getlist('categories')
         if form.is_valid():
 
             date_debut = form.cleaned_data['date_debut']
@@ -841,13 +1026,13 @@ def date_range(request):
 
             products = Produit.objects.filter(
                 demandedeproduit__bulletin__in=bulletins)
-            category_ids = request.POST.getlist('categories')
+            category_ids = selected_categories
             if category_ids:
                 products = products.filter(categorie__id__in=category_ids)
             quantities = products.annotate(total_quantity=Sum(
                 'demandedeproduit__quantite_fournie'))
             form = DateRangeForm()
-            return render(request, 'date_range.html', {'quantities': quantities, 'form': form, 'date_debut': date_debut, 'date_fin': date_fin, 'nom': nom, 'prenom': prenom,'page_temp':page_temp ,'categories':categories})
+            return render(request, 'date_range.html', {'quantities': quantities, 'form': form, 'date_debut': date_debut, 'date_fin': date_fin, 'nom': nom, 'prenom': prenom,'page_temp':page_temp ,'categories':categories,'category_filter_options': category_filter_options,'selected_categories': selected_categories})
     else:
         form = DateRangeForm()
-    return render(request, 'date_range.html', {'form': form, 'nom': nom, 'prenom': prenom, 'page_temp':page_temp,'categories':categories})
+    return render(request, 'date_range.html', {'form': form, 'nom': nom, 'prenom': prenom, 'page_temp':page_temp,'categories':categories,'category_filter_options': category_filter_options,'selected_categories': selected_categories})

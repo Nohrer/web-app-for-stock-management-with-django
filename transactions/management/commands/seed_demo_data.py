@@ -1,5 +1,6 @@
 from decimal import Decimal
 from datetime import date
+import random
 
 from django.core.management.base import BaseCommand
 from django.db import transaction
@@ -332,5 +333,36 @@ class Command(BaseCommand):
                 demande.fournisseurs.set([suppliers['Tech Distrib']])
             demande.email_envoye = True
             demande.save(update_fields=['email_envoye'])
+
+            # Ensure there are up to 50 demo bulletins with random products and states.
+            # The creation is idempotent: only create missing bulletins up to the target.
+            TARGET_BULLETIN_COUNT = 50
+            existing_bulletins = Bulletin_de_commande.objects.count()
+            to_create = max(0, TARGET_BULLETIN_COUNT - existing_bulletins)
+            product_list = list(products.values())
+            employee_list = list(employees.values())
+            state_choices = [s[0] for s in Bulletin_de_commande.STATE_CHOICES]
+
+            for i in range(to_create):
+                employe = random.choice(employee_list)
+                state = random.choice(state_choices)
+                # Random date in recent years (2024-2026)
+                rand_year = random.choice([2024, 2025, 2026])
+                rand_month = random.randint(1, 12)
+                rand_day = random.randint(1, 28)
+                b = Bulletin_de_commande.objects.create(
+                    employe=employe,
+                    state=state,
+                    date=date(rand_year, rand_month, rand_day),
+                )
+                # Add 1-5 random demande de produit lines
+                for _ in range(random.randint(1, 5)):
+                    prod = random.choice(product_list)
+                    qty = random.randint(1, 50)
+                    DemandeDeProduit.objects.create(
+                        bulletin=b,
+                        produit_demande=prod,
+                        quantite_demande=qty,
+                    )
 
             self.stdout.write(self.style.SUCCESS('Demo data seeded successfully.'))

@@ -8,10 +8,12 @@ Commande{% endblock%} {%block header%} Etat bulletin de Commande{% endblock%}
   <p class=" text-gray-700 font-bold my-2">Date Fin:</p>
 
   {{ form.date_fin }}
-  <p class="text-gray-700 font-bold my-2">Catégorie:</p>
-  <div class="flex">
-  {{ form.categories }}
-</div>
+  <p class="text-gray-700 font-bold my-2">Catégories:</p>
+  <select name="categories" multiple size="10" class="w-full rounded-xl border-slate-300 shadow-sm focus:border-sky-500 focus:ring-sky-500">
+    {% for option in category_filter_options %}
+    <option value="{{ option.value }}" {% if option.disabled %}disabled{% endif %} {% if option.value in selected_categories and not option.disabled %}selected{% endif %}>{{ option.label }}</option>
+    {% endfor %}
+  </select>
   <div class="flex justify-center mt-5 mb-5">
     <button
       type="submit"

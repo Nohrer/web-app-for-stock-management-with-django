@@ -22,13 +22,20 @@
   </a>
 </div>
 
-<!-- EXISTING SUPPLIERS TABLE -->
-<section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-lg mb-8">
+{% if not form.instance.pk %}
+<section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-lg mb-8 w-full max-w-none">
   <h2 class="mb-4 text-xl font-bold text-sky-950">Fournisseurs existants</h2>
+  <div class="mb-4 flex items-center justify-between">
+    <form method="get" class="flex items-center gap-2">
+      <input name="q" value="{{ q|default:'' }}" placeholder="Rechercher par nom" class="rounded-md border px-3 py-2 text-sm" />
+      <button type="submit" class="rounded-full bg-sky-600 text-white px-3 py-1 text-sm">Rechercher</button>
+      {% if q %}<a href="{% url 'transactions:create_fournisseur' %}" class="ml-2 text-sm text-slate-500">Réinitialiser</a>{% endif %}
+    </form>
+  </div>
   {% if form.instance.pk %}
     <p class="text-sm text-slate-500 mb-4">Vous modifiez actuellement un fournisseur.</p>
   {% else %}
-    <div class="overflow-hidden rounded-2xl border border-slate-200">
+    <div id="suppliers-list" class="overflow-hidden rounded-2xl border border-slate-200">
       <table class="w-full">
         <thead>
           <tr>
@@ -37,11 +44,12 @@
             <th class="bg-sky-950 px-4 py-3 text-left text-sm font-bold text-amber-300">Délai (jours)</th>
             <th class="bg-sky-950 px-4 py-3 text-left text-sm font-bold text-amber-300">Prix référence</th>
             <th class="bg-sky-950 px-4 py-3 text-left text-sm font-bold text-amber-300">Catégories</th>
+            <th class="bg-sky-950 px-4 py-3 text-left text-sm font-bold text-amber-300">Actions</th>
           </tr>
         </thead>
         <tbody>
           {% for supplier in suppliers %}
-          <tr class="border-t border-slate-100 hover:bg-slate-50">
+          <tr class="border-t border-slate-100 hover:bg-slate-50" data-supplier-id="{{ supplier.pk }}">
             <td class="px-4 py-3 font-semibold text-sky-950">{{ supplier.nom }}</td>
             <td class="px-4 py-3 text-slate-600">{{ supplier.email|default:"—" }}</td>
             <td class="px-4 py-3 text-center text-slate-600">{{ supplier.delai_livraison_jours }}</td>
@@ -53,22 +61,57 @@
                 <span class="text-slate-400">—</span>
               {% endfor %}
             </td>
+            <td class="px-4 py-3">
+              <div class="flex gap-3 items-center">
+                <a href="{% url 'transactions:edit_fournisseur' supplier.pk %}" class="text-sky-700 hover:text-amber-500 transition-colors" aria-label="Éditer">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125" />
+                  </svg>
+                </a>
+                <button type="button" data-delete-id="{{ supplier.pk }}" class="delete-supplier text-red-600 hover:text-red-800 transition-colors" aria-label="Supprimer">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 7h12M9 7V6a2 2 0 012-2h2a2 2 0 012 2v1M10 11v6M14 11v6" />
+                  </svg>
+                </button>
+              </div>
+            </td>
           </tr>
           {% empty %}
           <tr>
-            <td colspan="5" class="px-4 py-4 text-center text-slate-500">Aucun fournisseur enregistré.</td>
+            <td colspan="6" class="px-4 py-4 text-center text-slate-500">Aucun fournisseur enregistré.</td>
           </tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
   {% endif %}
+
+  <!-- Pagination -->
+  {% if page_obj.has_other_pages %}
+  <div class="flex justify-center my-4">
+    {% if page_obj.has_previous %}
+    <a href="?q={{ q|urlencode }}&page={{ page_obj.previous_page_number }}" class=" bg-amber-500 hover:bg-amber-600 text-white rounded-full transition-all duration-300">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-7 h-7">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 9l-3 3m0 0l3 3m-3-3h7.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+    </a>
+    {% endif %}
+    {% if page_obj.has_next %}
+    <a href="?q={{ q|urlencode }}&page={{ page_obj.next_page_number }}" class=" bg-amber-500 hover:bg-amber-600 text-white rounded-full transition-all duration-300">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-7 h-7">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12.75 15l3-3m0 0l-3-3m3 3h-7.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+    </a>
+    {% endif %}
+  </div>
+  {% endif %}
 </section>
+{% endif %}
 
 <!-- ADD NEW SUPPLIER FORM -->
-<form method="post" class="grid gap-6 lg:grid-cols-[1.3fr_0.7fr]">
+<form method="post" class="grid w-full max-w-none gap-6">
   {% csrf_token %}
-  <section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-lg">
+  <section class="w-full rounded-3xl border border-slate-200 bg-white p-6 shadow-lg">
     <h2 class="mb-4 text-xl font-bold text-sky-950">{% if form.instance.pk %}Modifier le fournisseur{% else %}Ajouter un fournisseur{% endif %}</h2>
     <div class="grid gap-5 md:grid-cols-2">
       <div>
@@ -100,22 +143,165 @@
       <label class="mb-2 block text-sm font-semibold text-slate-700">Note</label>
       {{ form.note }}
     </div>
+    <div class="mt-5">
+      <label class="mb-2 block text-sm font-semibold text-slate-700">Catégories</label>
+      <div id="category-tags" class="flex flex-wrap gap-2 mb-2"></div>
+      <div class="relative">
+        <input id="category-search" type="text" placeholder="Rechercher une catégorie..." class="w-full rounded-xl border-slate-300 shadow-sm py-2 px-3 focus:border-sky-500 focus:ring-sky-500 text-slate-700" autocomplete="off" />
+        <ul id="category-results" class="absolute z-50 w-full bg-white border rounded mt-1 max-h-40 overflow-auto hidden text-slate-800"></ul>
+      </div>
+      <div id="selected-categories-inputs" class="hidden"></div>
+    </div>
   </section>
 
-  <aside class="rounded-3xl border border-slate-200 bg-sky-950 p-6 text-white shadow-lg">
-    <div class="mb-4">
-      <h2 class="text-xl font-bold">Catégories servies</h2>
-      <p class="mt-2 text-sm text-slate-300">Sélectionnez les familles de produits couvertes par ce fournisseur.</p>
-    </div>
-    <div class="space-y-3 max-h-[420px] overflow-y-auto pr-2">
-      {{ form.categories }}
-    </div>
-  </aside>
-
-  <div class="lg:col-span-2 flex justify-end">
+  <div class="flex justify-end mb-12">
     <button type="submit" class="rounded-full bg-amber-500 px-8 py-3 text-sm font-semibold text-white shadow-lg hover:bg-amber-600 transition">
       {% if form.instance.pk %}Mettre à jour{% else %}Enregistrer{% endif %}
     </button>
   </div>
 </form>
-{% endblock %}
+
+  <script>
+  // Delete supplier via AJAX
+  function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+      const cookies = document.cookie.split(';');
+      for (let i = 0; i < cookies.length; i++) {
+        const cookie = cookies[i].trim();
+        if (cookie.substring(0, name.length + 1) === (name + '=')) {
+          cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+          break;
+        }
+      }
+    }
+    return cookieValue;
+  }
+
+  document.addEventListener('DOMContentLoaded', function(){
+    document.querySelectorAll('.delete-supplier').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        const pk = this.getAttribute('data-delete-id');
+        if (!pk) return;
+        if (!confirm('Confirmer la suppression du fournisseur ?')) return;
+        const url = `/ajout_fournisseur/${pk}/delete/`;
+        fetch(url, {
+          method: 'POST',
+          headers: {
+            'X-CSRFToken': getCookie('csrftoken'),
+            'Accept': 'application/json',
+          },
+        }).then(r=>r.json()).then(data=>{
+          if (data.ok) {
+            // remove row from DOM if present
+            const row = document.querySelector(`tr[data-supplier-id="${pk}"]`);
+            if (row) row.remove();
+            else location.reload();
+          } else {
+            alert('Échec de la suppression: ' + (data.error || 'Erreur'));
+          }
+        }).catch(err=>{
+          alert('Erreur réseau lors de la suppression.');
+        });
+      });
+    });
+  });
+  </script>
+
+  <script>
+  // Category searchable multi-select with tags
+  document.addEventListener('DOMContentLoaded', function(){
+    const CATEGORIES = {{ categories_json|safe }};
+    const tagsContainer = document.getElementById('category-tags');
+    const resultsList = document.getElementById('category-results');
+    const searchInput = document.getElementById('category-search');
+    const hiddenInputs = document.getElementById('selected-categories-inputs');
+
+    // initial selected from instance (if any)
+    const initialSelected = [];
+    {% if form.instance.pk %}
+      {% for c in form.instance.categories.all %}
+        initialSelected.push({id: {{ c.id }}, nom: '{{ c.nom|escapejs }}'});
+      {% endfor %}
+    {% endif %}
+
+    const selected = new Map();
+    function addCategory(id, name){
+      if (selected.has(id)) return;
+      selected.set(id, name);
+      renderTags();
+      updateHiddenInputs();
+    }
+    function removeCategory(id){
+      selected.delete(id);
+      renderTags();
+      updateHiddenInputs();
+    }
+    function renderTags(){
+      tagsContainer.innerHTML = '';
+      selected.forEach((name, id)=>{
+        const span = document.createElement('span');
+        span.className = 'inline-flex items-center gap-2 bg-sky-100 text-sky-800 rounded-full px-3 py-1 text-sm';
+        span.innerHTML = `<span>${name}</span><button type="button" class="ml-2 text-sky-600 hover:text-red-600" data-remove-id="${id}">&times;</button>`;
+        tagsContainer.appendChild(span);
+      });
+      // attach remove handlers
+      tagsContainer.querySelectorAll('button[data-remove-id]').forEach(btn=>{
+        btn.addEventListener('click', ()=>removeCategory(parseInt(btn.getAttribute('data-remove-id'))));
+      });
+    }
+    function updateHiddenInputs(){
+      hiddenInputs.innerHTML = '';
+      selected.forEach((name, id)=>{
+        const inp = document.createElement('input');
+        inp.type = 'hidden';
+        inp.name = 'categories';
+        inp.value = id;
+        hiddenInputs.appendChild(inp);
+      });
+    }
+
+    function showResults(matches){
+      resultsList.innerHTML = '';
+      if (!matches.length){ resultsList.classList.add('hidden'); return; }
+      resultsList.classList.remove('hidden');
+      matches.forEach(cat=>{
+        const li = document.createElement('li');
+        li.className = 'px-3 py-2 hover:bg-sky-100 cursor-pointer';
+        li.textContent = cat.nom;
+        li.addEventListener('click', ()=>{
+          addCategory(cat.id, cat.nom);
+          resultsList.classList.add('hidden');
+          searchInput.value = '';
+        });
+        resultsList.appendChild(li);
+      });
+    }
+
+    function refreshResults(){
+      const q = searchInput.value.trim().toLowerCase();
+      const matches = q
+        ? CATEGORIES.filter(c => c.nom.toLowerCase().includes(q) && !selected.has(c.id))
+        : CATEGORIES.filter(c => !selected.has(c.id));
+      showResults(matches.slice(0, 50));
+    }
+
+    searchInput.addEventListener('input', refreshResults);
+    searchInput.addEventListener('focus', refreshResults);
+
+    // click outside to hide
+    document.addEventListener('click', function(e){
+      if (!resultsList.contains(e.target) && e.target !== searchInput) resultsList.classList.add('hidden');
+    });
+
+    // populate initial selections
+    initialSelected.forEach(c=> addCategory(c.id, c.nom));
+
+    // show all categories immediately if the field starts empty
+    if (!searchInput.value.trim()) {
+      refreshResults();
+    }
+  });
+  </script>
+
+  {% endblock %}

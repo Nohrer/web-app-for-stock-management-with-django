@@ -1,6 +1,6 @@
 
 from django.urls import path
-from .views import new_bulletin, bulletin_list, bulletin_detail, modify_bulletin, voir_bulletin, bon_list, voir_bon, new_bon, date_range, supprimer_bulletin,traiter_bulletin,create_fournisseur,bulletin_list_employee,voir_bulletin_employee,demande_fournisseur,historique_fournisseurs,api_suppliers_by_category,api_products_by_category,api_update_demande_state, edit_demande, delete_demande
+from .views import new_bulletin, bulletin_list, bulletin_detail, modify_bulletin, voir_bulletin, bon_list, voir_bon, new_bon, date_range, supprimer_bulletin,traiter_bulletin,create_fournisseur,edit_fournisseur,delete_fournisseur,bulletin_list_employee,voir_bulletin_employee,demande_fournisseur,historique_fournisseurs,api_suppliers_by_category,api_products_by_category,api_update_demande_state, edit_demande, delete_demande
 
 
 app_name = 'transactions'
@@ -37,6 +37,8 @@ urlpatterns = [
          voir_bon, name='voir_bon'),
 
      path('ajout_fournisseur',create_fournisseur,name='create_fournisseur'),
+    path('ajout_fournisseur/<int:pk>/edit/', edit_fournisseur, name='edit_fournisseur'),
+    path('ajout_fournisseur/<int:pk>/delete/', delete_fournisseur, name='delete_fournisseur'),
     path('demande_fournisseur/', demande_fournisseur, name='demande_fournisseur'),
     path('demande_fournisseur/historique/', historique_fournisseurs, name='historique_fournisseurs'),
     path('demande_fournisseur/<int:pk>/edit/', edit_demande, name='edit_demande'),

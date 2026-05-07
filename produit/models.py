@@ -15,6 +15,13 @@ class Categorie(models.Model):
     nom = models.CharField(max_length=100)
     description = models.TextField()
     magasin = models.ForeignKey(Magasin, on_delete=models.CASCADE)
+    parent = models.ForeignKey(
+        'self',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='subcategories',
+    )
 
     def __str__(self):
         return self.nom

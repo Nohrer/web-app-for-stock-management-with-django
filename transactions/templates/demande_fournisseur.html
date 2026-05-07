@@ -1,6 +1,6 @@
 {% extends page_temp %}
-{% block title %}Demande fournisseur{% endblock %}
-{% block header %}Demande fournisseur{% endblock %}
+{% block title %}Demande Fournisseurs{% endblock %}
+{% block header %}Demande Fournisseurs{% endblock %}
 {% block main %}
 {% if messages %}
   <ul class="messages mb-4">
@@ -134,7 +134,7 @@
           {{ formset.management_form }}
           {% for form in formset %}
           <tr class="form-number border-t border-slate-100">
-            <td class="hidden">{{ form.id }}</td>
+            <td class="hidden">{% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}</td>
             <td class="px-3 py-3">{{ form.produit }}</td>
             <td class="px-3 py-3">{{ form.quantite }}</td>
             <td class="px-3 py-3">
@@ -147,9 +147,18 @@
     </div>
 
     <div id="empty-form" class="hidden">
-      {{ formset.empty_form.id }}
-      {{ formset.empty_form.produit }}
-      {{ formset.empty_form.quantite }}
+      <table>
+        <tbody>
+          <tr class="form-number border-t border-slate-100">
+            <td class="hidden">{% for hidden in formset.empty_form.hidden_fields %}{{ hidden }}{% endfor %}</td>
+            <td class="px-3 py-3">{{ formset.empty_form.produit }}</td>
+            <td class="px-3 py-3">{{ formset.empty_form.quantite }}</td>
+            <td class="px-3 py-3">
+              <button type="button" class="delete-btn rounded-full bg-red-500 px-4 py-2 text-sm font-semibold text-white hover:bg-red-600 transition">Supprimer</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   </section>
 
@@ -473,41 +482,24 @@
     const currentNumberForm = document.getElementsByClassName('form-number');
     let currentFormCounts = currentNumberForm.length;
 
-    const copyEmptyFormEl = document.createElement('tr');
-    const emptyFormInputs = document.getElementById('empty-form').querySelectorAll('input, select');
+    const emptyFormRow = document.getElementById('empty-form').querySelector('.form-number').cloneNode(true);
+    emptyFormRow.setAttribute('id', `form-${currentFormCounts}`);
 
+    const emptyFormInputs = emptyFormRow.querySelectorAll('select, input:not([type="hidden"])');
     emptyFormInputs.forEach((el) => {
-      const clonedInput = el.cloneNode(true);
-      clonedInput.setAttribute('class', 'w-full rounded-md border-slate-300 shadow-sm focus:border-sky-500 focus:ring-sky-500');
-      clonedInput.value = '';
-
-      const tdEl = document.createElement('td');
-      tdEl.setAttribute('class', 'px-3 py-3');
-      tdEl.appendChild(clonedInput);
-
-      copyEmptyFormEl.appendChild(tdEl);
+      el.setAttribute('class', 'w-full rounded-md border-slate-300 shadow-sm focus:border-sky-500 focus:ring-sky-500');
+      if (el.tagName === 'SELECT') {
+        el.selectedIndex = 0;
+      } else {
+        el.value = '';
+      }
     });
 
-    const deleteBtn = document.createElement('button');
-    deleteBtn.setAttribute('type', 'button');
-    deleteBtn.setAttribute('class', 'delete-btn rounded-full bg-red-500 px-4 py-2 text-sm font-semibold text-white hover:bg-red-600 transition');
-    deleteBtn.textContent = 'Supprimer';
-
-    const deleteBtnTd = document.createElement('td');
-    deleteBtnTd.setAttribute('class', 'px-3 py-3');
-    deleteBtnTd.appendChild(deleteBtn);
-    copyEmptyFormEl.appendChild(deleteBtnTd);
-
-    const trEl = document.createElement('tr');
-    trEl.setAttribute('class', 'form-number border-t border-slate-100');
-    trEl.setAttribute('id', `form-${currentFormCounts}`);
-    trEl.appendChild(copyEmptyFormEl);
-
     const regex = new RegExp('__prefix__', 'g');
-    trEl.innerHTML = trEl.innerHTML.replace(regex, currentFormCounts);
+    emptyFormRow.innerHTML = emptyFormRow.innerHTML.replace(regex, currentFormCounts);
     totalNewForms.setAttribute('value', currentFormCounts + 1);
 
-    formCopyTarget.append(trEl);
+    formCopyTarget.append(emptyFormRow);
     
     // Update the newly added product select with filtered products
     updateProductsList();
