@@ -8,28 +8,26 @@
 <div>
   <p class="text-lg font-semibold mt-4 mb-2 pl-2 text-slate-500">Catégories:</p>
 
-  <div
-    class="w-full h-8 bg-sky-950 flex justify-around rounded-t-lg text-white  items-center"
-  >
-    <a
-      href="?"
-      class="flex-1 text-center hover:bg-slate-800 hover:text-amber-400 transition-all"
-      >Tous</a
-    >
-    {% for categorie in categories%}
-    <a
-      href="?categorie={{ categorie.nom }}"
-      class="border-l-2 border-amber-400 flex-1 text-center hover:bg-slate-800 hover:text-amber-400 transition-all "
-      >{{ categorie.nom }}</a
-    >
-    {%endfor%}
-  </div>
+  <form method="get" class="rounded-t-lg bg-sky-950 p-3">
+    <div class="flex gap-3">
+      <select name="categorie_id" class="w-full rounded-md border-slate-300 bg-white text-slate-800">
+        <option value="">Toutes les catégories</option>
+        {% for opt in category_filter_options %}
+        <option value="{{ opt.value }}" {% if opt.disabled %}disabled{% endif %} {% if selected_category_id == opt.value and not opt.disabled %}selected{% endif %}>{{ opt.label }}</option>
+        {% endfor %}
+      </select>
+      <button type="submit" class="rounded-md bg-amber-500 px-4 py-2 font-semibold text-white hover:bg-amber-600 transition-all">Filtrer</button>
+    </div>
+  </form>
 </div>
 <form
   action="{% url 'produit:search_product' %}"
   method="GET"
   class="flex items-center bg-slate-200  gap-10  border-x-1 border-slate-400 py-1 "
 >
+  {% if selected_category_id %}
+  <input type="hidden" name="categorie_id" value="{{ selected_category_id }}" />
+  {% endif %}
   <p class="text-lg font-semibold  mb-2 text-slate-600 pl-4">Recherche:</p>
   <input
     type="text"
@@ -87,10 +85,10 @@
   </table>
   <div class="flex justify-center my-4">
     {% if products.has_previous %}
-    {% if selected_category %}
+    {% if selected_category_id %}
     
     <a
-      href="?page={{ products.previous_page_number }}&categorie={{ selected_category }}"
+      href="?page={{ products.previous_page_number }}&categorie_id={{ selected_category_id }}"
       class=" bg-amber-500 hover:bg-amber-600 text-white rounded-full transition-all duration-300"
     >
     {%else%}
@@ -115,9 +113,9 @@
       </svg>
     </a>
     {% endif %} {% if products.has_next %}
-    {% if selected_category %}
+    {% if selected_category_id %}
     <a
-      href="?page={{ products.next_page_number }}&categorie={{ selected_category }}"
+      href="?page={{ products.next_page_number }}&categorie_id={{ selected_category_id }}"
       class=" bg-amber-500 hover:bg-amber-600 text-white rounded-full transition-all duration-300"
     >
     {%else%}

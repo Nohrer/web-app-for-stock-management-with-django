@@ -31,12 +31,81 @@ class Command(BaseCommand):
                 service, _ = Service.objects.get_or_create(nom=service_name)
                 services[service_name] = service
 
-            category_specs = [
+            category_hierarchy = {
+                'X.All commodities': [
+                    'EQUIPEMENT (EQUIPMENT, SERVICE & SPARES)',
+                    'ELECTRICITE & INSTRUMENTATION (EQUIPMENT, SERVICE/INSTALLATION & SPARES)',
+                    'INDUSTRIAL MAINTENANCE, EXTERNALISATION AND LOGICTICS',
+                    'ARCHITECTURAL SERVICES',
+                    'LANDSCAPING AND GARDENING',
+                    'AUXILIARY MATERIAL AND UTILITIES',
+                    'BULK SUPPLY',
+                    'IT & TELECOM',
+                    'Construction & Buildings',
+                    'Equipements (Equipement, Service and Spares)',
+                    'Electricity & Instrumentation (Equipement, Service/installation and Spares)',
+                    'Industrial Maintenance, Externalisation and Logistics',
+                    'Intelectual Services',
+                    'Facility Management',
+                    'Additives/Auxiliary Material and Utilities',
+                    'Bulk supply',
+                    'IT & Telecom',
+                    'Duplicate Commodities',
+                    'SAP Commodities',
+                ],
+                'A.Structural Mechanical Piping': [
+                    'SMP General Contracting',
+                    'Piping works',
+                    'Structural works',
+                    'Mechanical works',
+                    'Industrial specialities',
+                ],
+                'B.Electrical & Instrumentation': [
+                    'Electrical works',
+                    'E&I General Contracting',
+                ],
+                'C.Civil Works': [
+                    'Earthworks',
+                    'Concrete Works',
+                    'Building & Structures',
+                    'Roads & Infrastructure',
+                    'Temporary & Anxillary Works',
+                    'Civil General Contracting',
+                ],
+                'D.Equipment': [
+                    'Static Equipment',
+                    'Rotating Equipment',
+                    'Process Equipment',
+                    'Air & Gas Systems',
+                    'Utilities Equipment',
+                    'Lifting Equipment',
+                    'Handling Equipment',
+                    'Separation Equipment',
+                    'Packaged Units & Skids',
+                    'Electrical & Power Systems',
+                    'Instrumentation & Control Systems',
+                    'Piping Materials',
+                    'Inspection & Testing Services',
+                    'Piping Supervision Services',
+                    'Fabrication & Manufacturing Services',
+                ],
+            }
+
+            # Keep a few legacy categories to preserve existing sample records.
+            legacy_categories = [
                 ('Electronique', 'Produits et accessoires electroniques'),
                 ('Alimentation', 'Produits alimentaires et consommables'),
                 ('Bureau', 'Fournitures de bureau'),
                 ('Informatique', 'Materiel informatique et reseau'),
             ]
+
+            category_specs = []
+            for head_name, sub_names in category_hierarchy.items():
+                category_specs.append((head_name, f'Head category: {head_name}'))
+                for sub_name in sub_names:
+                    category_specs.append((sub_name, f'Sub category under {head_name}'))
+            category_specs.extend(legacy_categories)
+
             categories = {}
             for name, description in category_specs:
                 categorie, _ = Categorie.objects.get_or_create(
@@ -59,6 +128,21 @@ class Command(BaseCommand):
                 (categories['Informatique'], 'Cable reseau', 'INFO-001', 90, 'Cable RJ45 5m'),
                 (categories['Informatique'], 'Clavier USB', 'INFO-002', 40, 'Clavier standard USB'),
             ]
+
+            # Requested volume: two products for each sub-category.
+            all_sub_categories = [sub for subs in category_hierarchy.values() for sub in subs]
+            for idx, sub_name in enumerate(all_sub_categories, start=1):
+                for prod_idx in range(1, 3):
+                    product_specs.append(
+                        (
+                            categories[sub_name],
+                            f'{sub_name} - Produit {prod_idx}',
+                            f'SUB{idx:03d}-P{prod_idx}',
+                            20 + (prod_idx * 5),
+                            f'Produit demo {prod_idx} pour la sous-categorie {sub_name}',
+                        )
+                    )
+
             products = {}
             for categorie, libelle, reference, quantite, detaille in product_specs:
                 produit, _ = Produit.objects.get_or_create(
@@ -141,6 +225,39 @@ class Command(BaseCommand):
                 fournisseur.save()
                 fournisseur.categories.set([categories[name] for name in spec['categories']])
                 suppliers[spec['nom']] = fournisseur
+
+            # Requested volume: two suppliers for each pair of sub-categories.
+            for pair_index in range(0, len(all_sub_categories), 2):
+                pair_number = (pair_index // 2) + 1
+                pair_categories = all_sub_categories[pair_index:pair_index + 2]
+
+                for supplier_idx in range(1, 3):
+                    supplier_name = f'Demo Pair Supplier {pair_number:02d}-{supplier_idx}'
+                    supplier_phone = f'07{pair_number:02d}{supplier_idx}45678'
+                    supplier_email = f'demo.pair.{pair_number:02d}.{supplier_idx}@example.com'
+                    supplier_delay = 2 + ((pair_number + supplier_idx) % 5)
+                    supplier_price = Decimal('300.00') + Decimal(pair_number * 15 + supplier_idx * 10)
+
+                    fournisseur, _ = Fournisseur.objects.get_or_create(
+                        nom=supplier_name,
+                        defaults={
+                            'adresse': f'Zone industrielle lot {pair_number:02d}-{supplier_idx}',
+                            'telephone': supplier_phone,
+                            'email': supplier_email,
+                            'delai_livraison_jours': supplier_delay,
+                            'prix_reference': supplier_price,
+                            'note': f'Fournisseur demo rattache aux sous-categories: {", ".join(pair_categories)}',
+                        },
+                    )
+                    fournisseur.adresse = f'Zone industrielle lot {pair_number:02d}-{supplier_idx}'
+                    fournisseur.telephone = supplier_phone
+                    fournisseur.email = supplier_email
+                    fournisseur.delai_livraison_jours = supplier_delay
+                    fournisseur.prix_reference = supplier_price
+                    fournisseur.note = f'Fournisseur demo rattache aux sous-categories: {", ".join(pair_categories)}'
+                    fournisseur.save()
+                    fournisseur.categories.set([categories[name] for name in pair_categories])
+                    suppliers[supplier_name] = fournisseur
 
             type_livraison, _ = type_bl.objects.get_or_create(typpe='Livraison standard')
             type_bl.objects.get_or_create(typpe='Reception fournisseur')

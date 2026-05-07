@@ -44,15 +44,21 @@
       </div>
       <div class="mt-5">
         <label class="mb-3 block text-sm font-semibold text-slate-700">Catégories</label>
-        <!-- Selected categories as removable chips -->
-        <div id="selected-chips" class="mb-4 flex flex-wrap gap-2">
-          <!-- Chips will be populated by JS -->
+        <div class="grid gap-4 md:grid-cols-2">
+          <div>
+            <label for="main-category-select" class="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">Catégorie principale</label>
+            <select id="main-category-select" class="w-full rounded-xl border-slate-300 shadow-sm focus:border-sky-500 focus:ring-sky-500">
+              <option value="">-- Sélectionner une catégorie principale --</option>
+            </select>
+          </div>
+          <div>
+            <label for="sub-category-select" class="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">Sous-catégorie</label>
+            <select id="sub-category-select" class="w-full rounded-xl border-slate-300 shadow-sm focus:border-sky-500 focus:ring-sky-500" disabled>
+              <option value="">-- Toutes les sous-catégories --</option>
+            </select>
+          </div>
         </div>
-        <!-- Clickable category buttons -->
-        <div id="category-list" class="grid grid-cols-3 gap-2">
-          <!-- Categories will be populated by JS -->
-        </div>
-        <!-- Hidden multi-select to store selected category IDs for form submission -->
+        <p class="mt-3 text-xs text-slate-500">Choisissez une catégorie principale puis, si besoin, une sous-catégorie.</p>
         <div class="hidden">{{ demande_form.categories }}</div>
         <div class="hidden">{{ demande_form.categorie }}</div>
       </div>
@@ -155,6 +161,8 @@
   </div>
 </form>
 
+{{ categories_json|json_script:"categories-data" }}
+
 <script>
   const categorySelect = document.getElementById('id_categories');
   const addMoreBtn = document.getElementById('addMore');
@@ -165,97 +173,174 @@
   const fournisseursCheckboxes = document.querySelector('input[name="demande_form-fournisseurs"]');
   const suppliersApi = "{% url 'transactions:api_suppliers_by_category' %}";
   const productsApi = "{% url 'transactions:api_products_by_category' %}";
-  const categoryList = document.getElementById('category-list');
-  const selectedChips = document.getElementById('selected-chips');
+  const mainCategorySelect = document.getElementById('main-category-select');
+  const subCategorySelect = document.getElementById('sub-category-select');
+  const categoryModelSelect = document.getElementById('id_categorie');
+  const rawCategoriesData = JSON.parse(document.getElementById('categories-data').textContent || '[]');
+  const allCategoriesDb = Array.isArray(rawCategoriesData)
+    ? rawCategoriesData
+    : JSON.parse(rawCategoriesData || '[]');
+  let activeCategoryIds = [];
+
+  const categoryHierarchy = {
+    'X.All commodities': [
+      'EQUIPEMENT (EQUIPMENT, SERVICE & SPARES)',
+      'ELECTRICITE & INSTRUMENTATION (EQUIPMENT, SERVICE/INSTALLATION & SPARES)',
+      'INDUSTRIAL MAINTENANCE, EXTERNALISATION AND LOGICTICS',
+      'ARCHITECTURAL SERVICES',
+      'LANDSCAPING AND GARDENING',
+      'AUXILIARY MATERIAL AND UTILITIES',
+      'BULK SUPPLY',
+      'IT & TELECOM',
+      'Construction & Buildings',
+      'Equipements (Equipement, Service and Spares)',
+      'Electricity & Instrumentation (Equipement, Service/installation and Spares)',
+      'Industrial Maintenance, Externalisation and Logistics',
+      'Intelectual Services',
+      'Facility Management',
+      'Additives/Auxiliary Material and Utilities',
+      'Bulk supply',
+      'IT & Telecom',
+      'Duplicate Commodities',
+      'SAP Commodities'
+    ],
+    'A.Structural Mechanical Piping': [
+      'SMP General Contracting',
+      'Piping works',
+      'Structural works',
+      'Mechanical works',
+      'Industrial specialities'
+    ],
+    'B.Electrical & Instrumentation': [
+      'Electrical works',
+      'E&I General Contracting'
+    ],
+    'C.Civil Works': [
+      'Earthworks',
+      'Concrete Works',
+      'Building & Structures',
+      'Roads & Infrastructure',
+      'Temporary & Anxillary Works',
+      'Civil General Contracting'
+    ],
+    'D.Equipment': [
+      'Static Equipment',
+      'Rotating Equipment',
+      'Process Equipment',
+      'Air & Gas Systems',
+      'Utilities Equipment',
+      'Lifting Equipment',
+      'Handling Equipment',
+      'Separation Equipment',
+      'Packaged Units & Skids',
+      'Electrical & Power Systems',
+      'Instrumentation & Control Systems',
+      'Piping Materials',
+      'Inspection & Testing Services',
+      'Piping Supervision Services',
+      'Fabrication & Manufacturing Services'
+    ]
+  };
 
   // Initialize event listeners
   addMoreBtn.addEventListener('click', add_new_form);
   formCopyTarget.addEventListener('click', handleFormDelete);
 
-  // Initialize chip-based category selector
-  function initializeCategoryChips() {
-    const allCategories = {{ categories_json|safe }};
-    
-    // Render clickable category buttons
-    categoryList.innerHTML = allCategories.map(cat => `
-      <button type="button" data-category-id="${cat.id}" class="category-btn rounded-full border-2 border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-amber-50 hover:border-amber-400 transition">
-        ${cat.nom}
-      </button>
-    `).join('');
-
-    // Add click listeners to category buttons
-    document.querySelectorAll('.category-btn').forEach(btn => {
-      btn.addEventListener('click', function(e) {
-        e.preventDefault();
-        const categoryId = this.getAttribute('data-category-id');
-        addCategoryChip(categoryId);
-      });
-    });
-
-    // Render initial chips if any categories were selected
-    renderChips();
+  function normalizeName(value) {
+    return String(value || '').trim().toLowerCase();
   }
 
-  function addCategoryChip(categoryId) {
-    const currentValues = Array.from(categorySelect.selectedOptions).map(o => o.value);
-    if (!currentValues.includes(categoryId)) {
-      // Add the category to the select
-      Array.from(categorySelect.options).forEach(option => {
-        if (option.value === categoryId) {
-          option.selected = true;
-        }
-      });
-      renderChips();
-      updateSuppliersList();
-      updateProductsList();
+  function mapNamesToCategoryIds(categoryNames) {
+    const wanted = categoryNames.map(normalizeName);
+    return allCategoriesDb
+      .filter(cat => wanted.includes(normalizeName(cat.nom)))
+      .map(cat => String(cat.id));
+  }
+
+  function setHiddenCategories(ids) {
+    activeCategoryIds = Array.from(new Set((ids || []).filter(Boolean)));
+
+    Array.from(categorySelect.options).forEach(option => {
+      option.selected = activeCategoryIds.includes(option.value);
+    });
+
+    if (activeCategoryIds.length === 0) {
+      categorySelect.selectedIndex = -1;
+    }
+
+    if (categoryModelSelect) {
+      categoryModelSelect.value = activeCategoryIds.length ? activeCategoryIds[0] : '';
     }
   }
 
-  function removeCategoryChip(categoryId) {
-    const currentValues = Array.from(categorySelect.selectedOptions).map(o => o.value);
-    if (currentValues.includes(categoryId)) {
-      Array.from(categorySelect.options).forEach(option => {
-        if (option.value === categoryId) {
-          option.selected = false;
-        }
-      });
-      renderChips();
+  function applyCategorySelection() {
+    const mainKey = mainCategorySelect.value;
+    const subValue = subCategorySelect.value;
+
+    if (!mainKey) {
+      setHiddenCategories([]);
       updateSuppliersList();
       updateProductsList();
+      return;
     }
+
+    const namesToMatch = subValue
+      ? [subValue]
+      : [mainKey].concat(categoryHierarchy[mainKey] || []);
+
+    const matchedIds = mapNamesToCategoryIds(namesToMatch);
+    setHiddenCategories(matchedIds);
+    updateSuppliersList();
+    updateProductsList();
   }
 
-  function renderChips() {
-    const selected = Array.from(categorySelect.selectedOptions);
-    const allCategories = {{ categories_json|safe }};
-    
-    selectedChips.innerHTML = selected.map(option => {
-      const cat = allCategories.find(c => c.id == option.value);
-      return `
-        <div class="inline-flex items-center gap-2 rounded-full bg-amber-100 px-3 py-2 text-sm font-semibold text-amber-900">
-          ${cat ? cat.nom : 'Catégorie'}
-          <button type="button" data-category-id="${option.value}" class="remove-chip ml-1 text-amber-900 hover:text-red-600 transition">
-            <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
-              <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path>
-            </svg>
-          </button>
-        </div>
-      `;
-    }).join('');
+  function populateSubCategories(mainKey) {
+    const subItems = categoryHierarchy[mainKey] || [];
+    subCategorySelect.innerHTML = '<option value="">-- Toutes les sous-catégories --</option>' +
+      subItems.map(name => `<option value="${name}">${name}</option>`).join('');
+    subCategorySelect.disabled = !mainKey;
+  }
 
-    // Add click listeners to remove buttons
-    document.querySelectorAll('.remove-chip').forEach(btn => {
-      btn.addEventListener('click', function(e) {
-        e.preventDefault();
-        const categoryId = this.getAttribute('data-category-id');
-        removeCategoryChip(categoryId);
-      });
+  function initializeCategoryDropdowns() {
+    const mainOptions = Object.keys(categoryHierarchy)
+      .map(key => `<option value="${key}">${key}</option>`)
+      .join('');
+    mainCategorySelect.innerHTML = '<option value="">-- Sélectionner une catégorie principale --</option>' + mainOptions;
+
+    mainCategorySelect.addEventListener('change', () => {
+      populateSubCategories(mainCategorySelect.value);
+      applyCategorySelection();
     });
+
+    subCategorySelect.addEventListener('change', () => {
+      applyCategorySelection();
+    });
+
+    const currentSelectedOption = Array.from(categorySelect.selectedOptions)[0];
+    if (currentSelectedOption) {
+      const currentName = normalizeName(currentSelectedOption.textContent);
+      Object.entries(categoryHierarchy).forEach(([mainKey, subs]) => {
+        if (normalizeName(mainKey) === currentName || subs.map(normalizeName).includes(currentName)) {
+          mainCategorySelect.value = mainKey;
+          populateSubCategories(mainKey);
+          const matchedSub = subs.find(sub => normalizeName(sub) === currentName);
+          if (matchedSub) {
+            subCategorySelect.value = matchedSub;
+          }
+        }
+      });
+    }
+
+    if (!mainCategorySelect.value) {
+      populateSubCategories('');
+    }
   }
 
   // Update suppliers when category changes (supports multiple categories)
   function updateSuppliersList() {
-    const selected = Array.from(categorySelect.selectedOptions).map(o => o.value).filter(Boolean);
+    const selected = activeCategoryIds.length
+      ? activeCategoryIds
+      : Array.from(categorySelect.selectedOptions).map(o => o.value).filter(Boolean);
     if (selected.length === 0) {
       suppliersBody.innerHTML = '<tr><td colspan="4" class="px-2 py-2 text-center text-slate-400">Sélectionnez une catégorie pour voir les fournisseurs disponibles.</td></tr>';
       return;
@@ -263,7 +348,12 @@
 
     const query = selected.join(',');
     fetch(`${suppliersApi}?category_ids=${query}`)
-      .then(response => response.json())
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        return response.json();
+      })
       .then(data => {
         if (data.suppliers.length === 0) {
           suppliersBody.innerHTML = '<tr><td colspan="4" class="px-2 py-2 text-center text-slate-400">Aucun fournisseur disponible pour ces catégories.</td></tr>';
@@ -282,27 +372,48 @@
           </tr>
         `).join('');
       })
-      .catch(error => console.error('Error:', error));
+      .catch(error => {
+        console.error('Error:', error);
+        suppliersBody.innerHTML = '<tr><td colspan="4" class="px-2 py-2 text-center text-slate-400">Erreur de chargement des fournisseurs.</td></tr>';
+      });
   }
 
   // Update products when categories change (supports multiple categories)
   function updateProductsList() {
-    const selected = Array.from(categorySelect.selectedOptions).map(o => o.value).filter(Boolean);
-    if (selected.length === 0) return;
+    const selected = activeCategoryIds.length
+      ? activeCategoryIds
+      : Array.from(categorySelect.selectedOptions).map(o => o.value).filter(Boolean);
+    const productSelects = document.querySelectorAll('select[name*="produit"]');
+
+    if (selected.length === 0) {
+      productSelects.forEach(select => {
+        select.innerHTML = '<option value="">-- Sélectionner un produit --</option>';
+      });
+      return;
+    }
 
     const query = selected.join(',');
     fetch(`${productsApi}?category_ids=${query}`)
-      .then(response => response.json())
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        return response.json();
+      })
       .then(data => {
         // Update the product select fields
-        const productSelects = document.querySelectorAll('select[name*="produit"]');
         productSelects.forEach(select => {
           const currentValue = select.value;
           select.innerHTML = '<option value="">-- Sélectionner un produit --</option>' + 
             data.products.map(product => `<option value="${product.id}" ${currentValue == product.id ? 'selected' : ''}>${product.libelle}</option>`).join('');
         });
       })
-      .catch(error => console.error('Error:', error));
+      .catch(error => {
+        console.error('Error:', error);
+        productSelects.forEach(select => {
+          select.innerHTML = '<option value="">-- Sélectionner un produit --</option>';
+        });
+      });
   }
 
   function add_new_form(e) {
@@ -374,10 +485,7 @@
   }
 
   // Initialize on page load
-  initializeCategoryChips();
-  if (Array.from(categorySelect.selectedOptions).length) {
-    updateSuppliersList();
-    updateProductsList();
-  }
+  initializeCategoryDropdowns();
+  applyCategorySelection();
 </script>
 {% endblock %}

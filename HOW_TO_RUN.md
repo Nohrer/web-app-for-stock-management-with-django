@@ -79,3 +79,4 @@ The seed command creates sample users for the app flow:
 * `employee_demo`
 
 Password for each demo account: `Demo12345!`
+

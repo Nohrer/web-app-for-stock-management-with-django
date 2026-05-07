@@ -121,11 +121,10 @@ def demande_fournisseur(request):
     fournisseurs_qs = Fournisseur.objects.all().order_by('delai_livraison_jours', 'prix_reference', 'nom')
 
     if selected_categories:
-        # keep only suppliers that cover ALL selected categories
+        # Keep suppliers that match at least one selected category.
+        # This preserves the previous UX where category filtering was inclusive.
         ids = [int(c) for c in selected_categories]
-        fournisseurs_qs = fournisseurs_qs.annotate(
-            _match_count=Count('categories', filter=Q(categories__id__in=ids))
-        ).filter(_match_count=len(ids)).distinct()
+        fournisseurs_qs = fournisseurs_qs.filter(categories__id__in=ids).distinct()
 
     selected_delai = request.POST.get('delai_max_jours') or request.GET.get('delai_max_jours')
 
@@ -201,8 +200,7 @@ def demande_fournisseur(request):
             prefix='lignes',
         )
 
-    import json
-    categories_json = json.dumps(list(Categorie.objects.all().values('id', 'nom')))
+    categories_json = list(Categorie.objects.all().values('id', 'nom'))
     
     return render(
         request,
@@ -282,9 +280,8 @@ def api_suppliers_by_category(request):
         ids = [int(x) for x in category_ids]
 
     suppliers = Fournisseur.objects.filter(categories__id__in=ids).distinct().annotate(
-        _match_count=Count('categories', filter=Q(categories__id__in=ids)),
         transaction_count=Count('demandes_approvisionnement')
-    ).filter(_match_count=len(ids)).values(
+    ).values(
         'id', 'nom', 'email', 'delai_livraison_jours', 'prix_reference', 'transaction_count'
     ).order_by('delai_livraison_jours', 'prix_reference', 'nom')
 
@@ -393,7 +390,7 @@ def edit_demande(request, pk):
         'formset': formset,
         'fournisseurs': fournisseurs_qs,
         'categories': Categorie.objects.all(),
-        'categories_json': json.dumps(list(Categorie.objects.all().values('id', 'nom'))),
+        'categories_json': list(Categorie.objects.all().values('id', 'nom')),
         'nom': employe.nom,
         'prenom': employe.prenom,
         'page_temp': page_temp,
