@@ -181,7 +181,7 @@ class DemandeApprovisionnementForm(forms.ModelForm):
             'fournisseurs',
         )
         widgets = {
-            'date': forms.DateInput(attrs={'type': 'date', 'class': 'w-full rounded-xl border-slate-300 shadow-sm focus:border-sky-500 focus:ring-sky-500'}),
+            'date': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': 'w-full rounded-xl border-slate-300 shadow-sm focus:border-sky-500 focus:ring-sky-500'}),
             'categorie': forms.HiddenInput(),
             'delai_max_jours': forms.NumberInput(attrs={'class': 'w-full rounded-xl border-slate-300 shadow-sm focus:border-sky-500 focus:ring-sky-500'}),
             'objet': forms.TextInput(attrs={'class': 'w-full rounded-xl border-slate-300 shadow-sm focus:border-sky-500 focus:ring-sky-500'}),

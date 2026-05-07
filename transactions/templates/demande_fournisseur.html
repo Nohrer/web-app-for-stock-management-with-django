@@ -77,7 +77,7 @@
       <p class="mb-4 text-sm text-slate-300">Sélectionnez les fournisseurs correspondant aux critères. La table affiche l'historique des transactions.</p>
       
       <!-- Suppliers Table with Transaction History -->
-      <div class="mb-4 rounded-lg border border-sky-700 bg-sky-900 p-3 overflow-x-auto">
+      <div class="mb-4 max-h-80 overflow-y-auto overflow-x-auto rounded-lg border border-sky-700 bg-sky-900 p-3">
         <table class="w-full text-xs" id="suppliers-table">
           <thead>
             <tr class="border-b border-sky-700">
@@ -134,6 +134,7 @@
           {{ formset.management_form }}
           {% for form in formset %}
           <tr class="form-number border-t border-slate-100">
+            <td class="hidden">{{ form.id }}</td>
             <td class="px-3 py-3">{{ form.produit }}</td>
             <td class="px-3 py-3">{{ form.quantite }}</td>
             <td class="px-3 py-3">
@@ -146,6 +147,7 @@
     </div>
 
     <div id="empty-form" class="hidden">
+      {{ formset.empty_form.id }}
       {{ formset.empty_form.produit }}
       {{ formset.empty_form.quantite }}
     </div>
@@ -162,6 +164,7 @@
 </form>
 
 {{ categories_json|json_script:"categories-data" }}
+{{ debug_demande|json_script:"debug-demande-data" }}
 
 <script>
   const categorySelect = document.getElementById('id_categories');
@@ -181,6 +184,8 @@
     ? rawCategoriesData
     : JSON.parse(rawCategoriesData || '[]');
   let activeCategoryIds = [];
+  let previousMainCategoryValue = '';
+  let previousSubCategoryValue = '';
 
   const categoryHierarchy = {
     'X.All commodities': [
@@ -273,6 +278,24 @@
     }
   }
 
+  function hasSelectedSuppliersOrProducts() {
+    const hasSelectedProduct = Array.from(document.querySelectorAll('select[name*="produit"]'))
+      .some(select => String(select.value || '').trim() !== '');
+    const hasSelectedSupplier = Array.from(document.querySelectorAll('input[name="fournisseurs"]:checked')).length > 0;
+    return hasSelectedProduct || hasSelectedSupplier;
+  }
+
+  function restorePreviousCategorySelection() {
+    mainCategorySelect.value = previousMainCategoryValue;
+    populateSubCategories(previousMainCategoryValue);
+    subCategorySelect.value = previousSubCategoryValue;
+  }
+
+  function commitCategorySelection() {
+    previousMainCategoryValue = mainCategorySelect.value || '';
+    previousSubCategoryValue = subCategorySelect.value || '';
+  }
+
   function applyCategorySelection() {
     const mainKey = mainCategorySelect.value;
     const subValue = subCategorySelect.value;
@@ -308,32 +331,58 @@
     mainCategorySelect.innerHTML = '<option value="">-- Sélectionner une catégorie principale --</option>' + mainOptions;
 
     mainCategorySelect.addEventListener('change', () => {
+      if (hasSelectedSuppliersOrProducts()) {
+        alert('Veuillez d\'abord supprimer les produits sélectionnés et décocher les fournisseurs avant de changer la catégorie.');
+        restorePreviousCategorySelection();
+        return;
+      }
       populateSubCategories(mainCategorySelect.value);
       applyCategorySelection();
+      commitCategorySelection();
     });
 
     subCategorySelect.addEventListener('change', () => {
+      if (hasSelectedSuppliersOrProducts()) {
+        alert('Veuillez d\'abord supprimer les produits sélectionnés et décocher les fournisseurs avant de changer la catégorie.');
+        restorePreviousCategorySelection();
+        return;
+      }
       applyCategorySelection();
+      commitCategorySelection();
     });
 
-    const currentSelectedOption = Array.from(categorySelect.selectedOptions)[0];
-    if (currentSelectedOption) {
-      const currentName = normalizeName(currentSelectedOption.textContent);
-      Object.entries(categoryHierarchy).forEach(([mainKey, subs]) => {
-        if (normalizeName(mainKey) === currentName || subs.map(normalizeName).includes(currentName)) {
-          mainCategorySelect.value = mainKey;
-          populateSubCategories(mainKey);
-          const matchedSub = subs.find(sub => normalizeName(sub) === currentName);
-          if (matchedSub) {
-            subCategorySelect.value = matchedSub;
+    // Determine main/sub selection from the selected category id (more robust than matching by visible text)
+    const debugDemande = JSON.parse(document.getElementById('debug-demande-data').textContent || '{}');
+    const initialSelectedOption = Array.from(categorySelect.selectedOptions)[0];
+    let initialCategoryId = null;
+    if (initialSelectedOption) {
+      initialCategoryId = initialSelectedOption.value;
+    } else if (debugDemande && debugDemande.categorie_id) {
+      initialCategoryId = String(debugDemande.categorie_id);
+    }
+
+    if (initialCategoryId) {
+      const catObj = allCategoriesDb.find(c => String(c.id) === String(initialCategoryId));
+      const catName = catObj ? normalizeName(catObj.nom) : null;
+      if (catName) {
+        Object.entries(categoryHierarchy).forEach(([mainKey, subs]) => {
+          if (normalizeName(mainKey) === catName || subs.map(normalizeName).includes(catName)) {
+            mainCategorySelect.value = mainKey;
+            populateSubCategories(mainKey);
+            const matchedSub = subs.find(sub => normalizeName(sub) === catName);
+            if (matchedSub) {
+              subCategorySelect.value = matchedSub;
+            }
           }
-        }
-      });
+        });
+      }
     }
 
     if (!mainCategorySelect.value) {
       populateSubCategories('');
     }
+
+    commitCategorySelection();
   }
 
   // Update suppliers when category changes (supports multiple categories)
@@ -360,11 +409,13 @@
           return;
         }
 
-        const currentFournisseurIds = Array.from(document.querySelectorAll('input[name="fournisseurs"]:checked')).map(cb => parseInt(cb.value));
+        const debugDemande = JSON.parse(document.getElementById('debug-demande-data').textContent || '{}');
+        const initialFournisseurIds = Array.isArray(debugDemande.fournisseurs) ? debugDemande.fournisseurs.map(Number) : [];
+        const currentFournisseurIds = Array.from(document.querySelectorAll('input[name="fournisseurs"]:checked')).map(cb => parseInt(cb.value)).concat(initialFournisseurIds);
         suppliersBody.innerHTML = data.suppliers.map(supplier => `
           <tr class="border-b border-sky-700 hover:bg-sky-800">
             <td class="px-2 py-2">
-              <input type="checkbox" name="fournisseurs" value="${supplier.id}" ${currentFournisseurIds.includes(supplier.id) ? 'checked' : ''} class="rounded border-sky-600 text-amber-500 focus:ring-amber-500">
+              <input type="checkbox" name="fournisseurs" value="${supplier.id}" ${initialFournisseurIds.includes(supplier.id) || currentFournisseurIds.includes(supplier.id) ? 'checked' : ''} class="rounded border-sky-600 text-amber-500 focus:ring-amber-500">
             </td>
             <td class="px-2 py-2 text-sm">${supplier.nom}</td>
             <td class="px-2 py-2 text-center text-sm">${supplier.delai_livraison_jours}</td>

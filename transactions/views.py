@@ -9,6 +9,7 @@ from .models import (
     Bonne_livraison,
     EntreeDeProduit,
     DemandeApprovisionnement,
+    DemandeApprovisionnementLigne,
 )
 from django.forms import inlineformset_factory
 from django.views.decorators.http import require_POST, require_GET
@@ -185,7 +186,7 @@ def demande_fournisseur(request):
         messages.error(request, 'Veuillez corriger les erreurs du formulaire.')
     else:
         initial = {
-            'date': timezone.now().date(),
+            'date': timezone.now().date().isoformat(),
         }
         # if categories were supplied via GET, set initial for the form's categories field
         if selected_categories:
@@ -211,6 +212,7 @@ def demande_fournisseur(request):
             'fournisseurs': fournisseurs_qs,
             'categories': Categorie.objects.all(),
             'categories_json': categories_json,
+            'debug_demande': {},
             'nom': nom,
             'prenom': prenom,
             'page_temp': page_temp,
@@ -345,12 +347,27 @@ def edit_demande(request, pk):
         page_temp = 'dashboard.html'
 
     # initial suppliers queryset based on existing demande.categorie
-    fournisseurs_qs = Fournisseur.objects.filter(categories__id=demande.categorie_id).distinct()
+    fournisseurs_qs = Fournisseur.objects.filter(
+        Q(categories__id=demande.categorie_id) | Q(pk__in=demande.fournisseurs.values_list('pk', flat=True))
+    ).distinct()
 
     if request.method == 'POST':
         action = request.POST.get('action')
-        demande_form = DemandeApprovisionnementForm(request.POST, instance=demande, fournisseurs_queryset=fournisseurs_qs)
-        formset = DemandeApprovisionnementLigneFormSet(request.POST, instance=demande, prefix='lignes')
+        post_data = request.POST.copy()
+        if not post_data.getlist('categories') and demande.categorie_id:
+            post_data.setlist('categories', [str(demande.categorie_id)])
+        if not post_data.get('categorie') and demande.categorie_id:
+            post_data['categorie'] = str(demande.categorie_id)
+
+        posted_supplier_ids = [int(pk) for pk in post_data.getlist('fournisseurs') if pk.isdigit()]
+        fournisseurs_qs = Fournisseur.objects.filter(
+            Q(categories__id=demande.categorie_id)
+            | Q(pk__in=demande.fournisseurs.values_list('pk', flat=True))
+            | Q(pk__in=posted_supplier_ids)
+        ).distinct()
+
+        demande_form = DemandeApprovisionnementForm(post_data, instance=demande, fournisseurs_queryset=fournisseurs_qs)
+        formset = DemandeApprovisionnementLigneFormSet(post_data, instance=demande, prefix='lignes')
         if demande_form.is_valid() and formset.is_valid():
             demande = demande_form.save(commit=False)
             # set primary category from categories field if provided
@@ -375,15 +392,47 @@ def edit_demande(request, pk):
 
             messages.success(request, 'Demande mise à jour.')
             return redirect('transactions:historique_fournisseurs')
+
+        print("[DEBUG] edit_demande form errors:", demande_form.errors.as_json())
+        print("[DEBUG] edit_demande formset errors:", formset.errors)
+        print("[DEBUG] edit_demande formset non_form_errors:", formset.non_form_errors())
         messages.error(request, 'Veuillez corriger les erreurs du formulaire.')
     else:
         # preserve the current date and categories when opening the edit form
         initial = {
-            'date': demande.date,
+            'date': demande.date.isoformat(),
             'categories': [demande.categorie_id],
         }
         demande_form = DemandeApprovisionnementForm(instance=demande, initial=initial, fournisseurs_queryset=fournisseurs_qs)
-        formset = DemandeApprovisionnementLigneFormSet(instance=demande, prefix='lignes')
+        # Use a formset with no extra blank form when editing to avoid the extra empty line
+        from django.forms import inlineformset_factory
+        from .forms import DemandeApprovisionnementLigneForm
+        EditLigneFormSet = inlineformset_factory(
+            DemandeApprovisionnement,
+            DemandeApprovisionnementLigne,
+            form=DemandeApprovisionnementLigneForm,
+            fields=('produit', 'quantite'),
+            extra=0,
+            can_delete=False,
+        )
+        formset = EditLigneFormSet(instance=demande, prefix='lignes')
+
+    # Debug info: expose what's actually stored on the demande for quick inspection
+    try:
+        debug_demande = {
+            'id': demande.pk,
+            'categorie_id': demande.categorie_id,
+            'fournisseurs': list(demande.fournisseurs.values_list('id', flat=True)),
+            'lignes': list(demande.lignes.values('produit_id', 'quantite')),
+            'objet': demande.objet,
+            'message': demande.message,
+            'date': str(demande.date),
+            'etat': demande.etat,
+        }
+        print("[DEBUG] edit_demande data:", debug_demande)
+    except Exception as e:
+        debug_demande = {'error': str(e)}
+        print("[DEBUG] edit_demande error while building debug_demande:", e)
 
     return render(request, 'demande_fournisseur.html', {
         'demande_form': demande_form,
@@ -391,6 +440,7 @@ def edit_demande(request, pk):
         'fournisseurs': fournisseurs_qs,
         'categories': Categorie.objects.all(),
         'categories_json': list(Categorie.objects.all().values('id', 'nom')),
+        'debug_demande': debug_demande,
         'nom': employe.nom,
         'prenom': employe.prenom,
         'page_temp': page_temp,
