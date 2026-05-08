@@ -12,8 +12,6 @@ class Fournisseur(models.Model):
     telephone = models.CharField(max_length=10)
     email = models.EmailField(blank=True)
     categories = models.ManyToManyField(Categorie, related_name='fournisseurs', blank=True)
-    delai_livraison_jours = models.PositiveIntegerField(default=0)
-    prix_reference = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     note = models.TextField(blank=True)
 
     def __str__(self):
@@ -24,8 +22,6 @@ class DemandeApprovisionnement(models.Model):
     date = models.DateField(default=timezone.now)
     categorie = models.ForeignKey(Categorie, on_delete=models.PROTECT)
     fournisseurs = models.ManyToManyField(Fournisseur, related_name='demandes_approvisionnement', blank=True)
-    delai_max_jours = models.PositiveIntegerField(null=True, blank=True)
-    prix_max = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     objet = models.CharField(max_length=200)
     message = models.TextField(blank=True)
     email_envoye = models.BooleanField(default=False)

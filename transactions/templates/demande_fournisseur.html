@@ -6,7 +6,7 @@
 <div class="mb-6 flex items-center justify-between gap-4">
   <div>
     <h1 class="text-3xl font-bold text-sky-950">Choisir les fournisseurs</h1>
-    <p class="mt-2 text-slate-500">Filtre par catégorie, délai et prix, puis envoie la demande avec les quantités requises.</p>
+    <p class="mt-2 text-slate-500">Filtre par catégorie, puis envoie la demande avec les quantités requises.</p>
   </div>
   <div class="flex gap-3">
     <a href="{% url 'transactions:historique_fournisseurs' %}" class="rounded-full border border-slate-300 px-5 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition">
@@ -28,11 +28,7 @@
           <label class="mb-2 block text-sm font-semibold text-slate-700">Date</label>
           {{ demande_form.date }}
         </div>
-        <div>
-          <label class="mb-2 block text-sm font-semibold text-slate-700">Délai maximum</label>
-          {{ demande_form.delai_max_jours }}
-        </div>
-      </div>
+              </div>
       <div class="mt-5">
         <label class="mb-3 block text-sm font-semibold text-slate-700">Catégories</label>
         <div class="grid gap-4 md:grid-cols-2">
@@ -74,7 +70,6 @@
             <tr class="border-b border-sky-700">
               <th class="px-2 py-2 text-left text-amber-300">Sélectionner</th>
               <th class="px-2 py-2 text-left text-amber-300">Fournisseur</th>
-              <th class="px-2 py-2 text-center text-amber-300">Délai (j)</th>
               <th class="px-2 py-2 text-center text-amber-300">Transactions</th>
             </tr>
           </thead>
@@ -157,7 +152,7 @@
     <button type="button" id="save-btn" class="w-1/2 rounded-full bg-amber-500 px-8 py-4 text-sm font-semibold uppercase tracking-wide text-white shadow-lg hover:bg-amber-600 transition lg:w-1/4">
       Enregistrer
     </button>
-      <button type="submit" name="action" value="send" class="w-1/2 rounded-full bg-sky-950 px-8 py-4 text-sm font-semibold uppercase tracking-wide text-white shadow-lg hover:bg-sky-900 transition lg:w-1/4">
+      <button type="button" id="send-btn" class="w-1/2 rounded-full bg-sky-950 px-8 py-4 text-sm font-semibold uppercase tracking-wide text-white shadow-lg hover:bg-sky-900 transition lg:w-1/4">
       Envoyer (Email)
     </button>
   </div>
@@ -242,6 +237,7 @@
   
   // Save confirmation modal elements
   const saveBtn = document.getElementById('save-btn');
+  const sendBtn = document.getElementById('send-btn');
   const saveConfirmModal = document.getElementById('save-confirm-modal');
   const closeSaveModalBtn = document.getElementById('close-save-modal');
   const saveDraftBtn = document.getElementById('save-draft-btn');
@@ -377,8 +373,71 @@
     saveConfirmModal.classList.remove('flex');
   }
 
+  // Form validation function
+  function validateForm() {
+    const errors = [];
+    
+    // Check if at least one category is selected
+    const mainCategorySelect = document.getElementById('main-category-select');
+    if (!mainCategorySelect.value) {
+      errors.push('Veuillez sélectionner une catégorie principale.');
+    }
+    
+    // Check if at least one supplier is selected
+    const selectedSuppliers = document.querySelectorAll('input[name="fournisseurs"]:checked');
+    if (selectedSuppliers.length === 0) {
+      errors.push('Veuillez sélectionner au moins un fournisseur.');
+    }
+    
+    // Check if at least one product line is filled
+    const productSelects = document.querySelectorAll('select[name*="produit"]');
+    let hasProduct = false;
+    productSelects.forEach(select => {
+      if (select.value) {
+        hasProduct = true;
+      }
+    });
+    
+    if (!hasProduct) {
+      errors.push('Vous devez ajouter au moins un produit à la demande.');
+    }
+    
+    // Check quantities for filled product lines
+    const quantityInputs = document.querySelectorAll('input[name*="quantite"]');
+    productSelects.forEach((select, index) => {
+      if (select.value) {
+        const quantity = quantityInputs[index];
+        if (!quantity.value || parseFloat(quantity.value) <= 0) {
+          errors.push(`La quantité pour le produit ${index + 1} doit être supérieure à 0.`);
+        }
+      }
+    });
+    
+    // Check date is not in the past
+    const dateInput = document.querySelector('input[name="date"]');
+    if (dateInput && dateInput.value) {
+      const selectedDate = new Date(dateInput.value);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (selectedDate < today) {
+        errors.push('La date ne peut pas être dans le passé. Veuillez sélectionner aujourd\'hui ou une date future.');
+      }
+    }
+    
+    return errors;
+  }
+
   // Save confirmation modal event listeners
-  saveBtn.addEventListener('click', openSaveConfirmModal);
+  saveBtn.addEventListener('click', () => {
+    const errors = validateForm();
+    if (errors.length > 0) {
+      // Show validation errors instead of modal
+      errors.forEach(error => showMessage(error, 'error'));
+      return;
+    }
+    openSaveConfirmModal();
+  });
+  
   closeSaveModalBtn.addEventListener('click', closeSaveConfirmModal);
   saveConfirmModal.addEventListener('click', (event) => {
     if (event.target === saveConfirmModal) {
@@ -387,15 +446,36 @@
   });
 
   // Handle save draft button
-  saveDraftBtn.addEventListener('click', () => {
+  saveDraftBtn.addEventListener('click', async () => {
     closeSaveConfirmModal();
-    // Create a hidden input to set the action to 'save' and submit the form
-    const actionInput = document.createElement('input');
-    actionInput.type = 'hidden';
-    actionInput.name = 'action';
-    actionInput.value = 'save';
-    requestForm.appendChild(actionInput);
-    requestForm.submit();
+    
+    try {
+      const formData = new FormData(requestForm);
+      formData.set('action', 'save');
+
+      const submitUrl = requestForm.getAttribute('action') || window.location.href;
+      const response = await fetch(submitUrl, {
+        method: 'POST',
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest',
+          'Accept': 'application/json',
+        },
+        body: formData,
+      });
+
+      if (response.ok) {
+        showMessage('Demande enregistrée (brouillon).', 'success');
+        // Optionally reload after a short delay to show updated state
+        setTimeout(() => {
+          window.location.reload();
+        }, 1500);
+      } else {
+        const errorText = await response.text();
+        showMessage('Erreur lors de l\'enregistrement. Veuillez réessayer.', 'error');
+      }
+    } catch (error) {
+      showMessage('Erreur lors de l\'enregistrement. Veuillez réessayer.', 'error');
+    }
   });
 
   // Save and send modal functions
@@ -450,9 +530,11 @@
         throw new Error('Impossible de préparer les liens mail.');
       }
 
+      // Show real-time success message
+      showMessage('Demande enregistrée. Ouverture du client mail.', 'success');
       openSaveSendModal(payload);
     } catch (error) {
-      alert(error.message || 'Erreur lors de la préparation des emails.');
+      showMessage(error.message || 'Erreur lors de la préparation des emails.', 'error');
     }
   });
 
@@ -464,17 +546,16 @@
     }
   });
 
-  requestForm.addEventListener('submit', async (event) => {
-    const actionButton = event.submitter || (document.activeElement && document.activeElement.name === 'action' ? document.activeElement : null);
-    const isSendAction = actionButton && actionButton.value === 'send';
-    if (!isSendAction) {
+  // Handle direct send button (Envoyer Email)
+  sendBtn.addEventListener('click', async () => {
+    // Validate form first
+    const errors = validateForm();
+    if (errors.length > 0) {
+      // Show validation errors instead of proceeding
+      errors.forEach(error => showMessage(error, 'error'));
       return;
     }
-
-    event.preventDefault();
-    sendButton.disabled = true;
-    sendButton.classList.add('opacity-70', 'cursor-wait');
-
+    
     try {
       const formData = new FormData(requestForm);
       formData.set('action', 'send');
@@ -503,15 +584,15 @@
         throw new Error('Impossible de préparer les liens mail.');
       }
 
+      // Show real-time success message
+      showMessage('Demande enregistrée. Ouverture du client mail.', 'success');
       openMailModal(payload);
     } catch (error) {
-      alert(error.message || 'Erreur lors de la préparation des emails.');
-    } finally {
-      sendButton.disabled = false;
-      sendButton.classList.remove('opacity-70', 'cursor-wait');
+      showMessage(error.message || 'Erreur lors de la préparation des emails.', 'error');
     }
   });
 
+  
   function normalizeName(value) {
     return String(value || '').trim().toLowerCase();
   }

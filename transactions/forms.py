@@ -142,8 +142,6 @@ class FournisseurForm(forms.ModelForm):
             'telephone',
             'email',
             'categories',
-            'delai_livraison_jours',
-            'prix_reference',
             'note',
         )
         widgets = {
@@ -151,8 +149,6 @@ class FournisseurForm(forms.ModelForm):
             'adresse': forms.TextInput(attrs={'class': 'w-full rounded-xl border-slate-300 shadow-sm focus:border-sky-500 focus:ring-sky-500'}),
             'telephone': forms.TextInput(attrs={'class': 'w-full rounded-xl border-slate-300 shadow-sm focus:border-sky-500 focus:ring-sky-500'}),
             'email': forms.EmailInput(attrs={'class': 'w-full rounded-xl border-slate-300 shadow-sm focus:border-sky-500 focus:ring-sky-500'}),
-            'delai_livraison_jours': forms.NumberInput(attrs={'class': 'w-full rounded-xl border-slate-300 shadow-sm focus:border-sky-500 focus:ring-sky-500'}),
-            'prix_reference': forms.NumberInput(attrs={'class': 'w-full rounded-xl border-slate-300 shadow-sm focus:border-sky-500 focus:ring-sky-500', 'step': '0.01'}),
             'note': forms.Textarea(attrs={'rows': 4, 'class': 'w-full rounded-xl border-slate-300 shadow-sm focus:border-sky-500 focus:ring-sky-500'}),
             'categories': forms.SelectMultiple(attrs={'class': 'w-full rounded-xl border-slate-300 shadow-sm focus:border-sky-500 focus:ring-sky-500', 'size': 6}),
         }
@@ -175,7 +171,6 @@ class DemandeApprovisionnementForm(forms.ModelForm):
         fields = (
             'date',
             'categorie',
-            'delai_max_jours',
             'objet',
             'message',
             'fournisseurs',
@@ -183,7 +178,6 @@ class DemandeApprovisionnementForm(forms.ModelForm):
         widgets = {
             'date': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': 'w-full rounded-xl border-slate-300 shadow-sm focus:border-sky-500 focus:ring-sky-500'}),
             'categorie': forms.HiddenInput(),
-            'delai_max_jours': forms.NumberInput(attrs={'class': 'w-full rounded-xl border-slate-300 shadow-sm focus:border-sky-500 focus:ring-sky-500'}),
             'objet': forms.TextInput(attrs={'class': 'w-full rounded-xl border-slate-300 shadow-sm focus:border-sky-500 focus:ring-sky-500'}),
             'message': forms.Textarea(attrs={'rows': 4, 'class': 'w-full rounded-xl border-slate-300 shadow-sm focus:border-sky-500 focus:ring-sky-500'}),
             'fournisseurs': forms.CheckboxSelectMultiple(),

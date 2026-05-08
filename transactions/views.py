@@ -2,6 +2,7 @@ from django.urls import reverse
 from django.template.loader import get_template
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render, redirect
+from django.db import models
 import json
 from .models import (
     Bulletin_de_commande,
@@ -147,7 +148,11 @@ def create_fournisseur(request):
     q = request.GET.get('q', '').strip()
     suppliers_qs = Fournisseur.objects.all().order_by('nom')
     if q:
-        suppliers_qs = suppliers_qs.filter(nom__icontains=q)
+        # Search by name or category
+        suppliers_qs = suppliers_qs.filter(
+            models.Q(nom__icontains=q) | 
+            models.Q(categories__nom__icontains=q)
+        ).distinct()
 
     page_number = request.GET.get('page')
     paginator = Paginator(suppliers_qs, 8)
@@ -189,7 +194,11 @@ def edit_fournisseur(request, pk):
     q = request.GET.get('q', '').strip()
     suppliers_qs = Fournisseur.objects.all().order_by('nom')
     if q:
-        suppliers_qs = suppliers_qs.filter(nom__icontains=q)
+        # Search by name or category
+        suppliers_qs = suppliers_qs.filter(
+            models.Q(nom__icontains=q) | 
+            models.Q(categories__nom__icontains=q)
+        ).distinct()
     paginator = Paginator(suppliers_qs, 8)
     page_number = request.GET.get('page')
     suppliers = paginator.get_page(page_number)
@@ -247,7 +256,7 @@ def _build_supply_request_mailto_urls(demande, employee_name):
             '',
             f"Une nouvelle demande d'approvisionnement a été préparée par {employee_name}.",
             f"Catégorie cible: {demande.categorie.nom}",
-            f"Délai maximal souhaité: {demande.delai_max_jours or 'non précisé'} jours",
+            f"Date de livraison souhaitée: {demande.date.strftime('%d/%m/%Y')}",
             '',
             'Produits demandés:',
             *product_lines,
@@ -285,7 +294,7 @@ def demande_fournisseur(request):
 
     # allow multiple categories selection (sent as categories[])
     selected_categories = request.POST.getlist('categories') or request.GET.getlist('categories')
-    fournisseurs_qs = Fournisseur.objects.all().order_by('delai_livraison_jours', 'prix_reference', 'nom')
+    fournisseurs_qs = Fournisseur.objects.all().order_by('nom')
 
     if selected_categories:
         # Keep suppliers that match at least one selected category.
@@ -293,12 +302,7 @@ def demande_fournisseur(request):
         ids = [int(c) for c in selected_categories]
         fournisseurs_qs = fournisseurs_qs.filter(categories__id__in=ids).distinct()
 
-    selected_delai = request.POST.get('delai_max_jours') or request.GET.get('delai_max_jours')
-
-    if selected_delai:
-        fournisseurs_qs = fournisseurs_qs.filter(delai_livraison_jours__lte=selected_delai)
-
-    fournisseurs_qs = fournisseurs_qs.distinct().order_by('delai_livraison_jours', 'prix_reference', 'nom')
+    fournisseurs_qs = fournisseurs_qs.distinct().order_by('nom')
 
     if request.method == 'POST':
         action = request.POST.get('action')
@@ -352,20 +356,26 @@ def demande_fournisseur(request):
                     f'{nom} {prenom}',
                 )
                 if not mail_payload['links']:
+                    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                        return JsonResponse({
+                            'ok': False,
+                            'error': 'Demande enregistrée, mais aucun fournisseur avec email valide n\'a été trouvé.'
+                        })
                     messages.warning(request, 'Demande enregistrée, mais aucun fournisseur avec email valide n\'a été trouvé.')
                     return redirect('transactions:demande_fournisseur')
 
                 demande.email_envoye = False
                 demande.etat = 'sent'
                 demande.save(update_fields=['email_envoye', 'etat'])
-                messages.success(request, 'Demande enregistrée. Mail Envoyée.')
-                if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or 'application/json' in request.headers.get('Accept', ''):
+                
+                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                     return JsonResponse({
                         'ok': True,
                         'message': 'Demande enregistrée. Mail Envoyée.',
                         'payload': mail_payload,
                     })
-
+                
+                messages.success(request, 'Demande enregistrée. Mail Envoyée.')
                 mailto_links_html = ''.join(
                     f'<li class="mb-2"><a href="{item["url"]}" target="_blank" rel="noopener noreferrer" class="text-sky-700 underline">Ouvrir le mail pour {item["name"]} ({item["email"]})</a></li>'
                     for item in mail_payload['links']
@@ -383,6 +393,13 @@ def demande_fournisseur(request):
                 )
                 return HttpResponse(html)
 
+            # Handle save action
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({
+                    'ok': True,
+                    'message': 'Demande enregistrée (brouillon).'
+                })
+            
             messages.success(request, 'Demande enregistrée (brouillon).')
             return redirect('transactions:demande_fournisseur')
 
@@ -401,8 +418,6 @@ def demande_fournisseur(request):
                         error_messages.append(f"Objet: {error}")
                     elif field == 'message':
                         error_messages.append(f"Message: {error}")
-                    elif field == 'delai_max_jours':
-                        error_messages.append(f"Délai maximum: {error}")
                     elif field == 'fournisseurs':
                         error_messages.append(f"Fournisseurs: {error}")
                     else:
@@ -431,9 +446,21 @@ def demande_fournisseur(request):
         
         # Display specific error messages or fallback
         if error_messages:
+            # Handle AJAX error responses
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({
+                    'ok': False,
+                    'error': '; '.join(error_messages[:3])  # Send first 3 errors
+                })
             for msg in error_messages[:5]:  # Limit to first 5 errors to avoid overwhelming
                 messages.error(request, msg)
         else:
+            # Handle AJAX error responses
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({
+                    'ok': False,
+                    'error': 'Veuillez corriger les erreurs du formulaire.'
+                })
             messages.error(request, 'Veuillez corriger les erreurs du formulaire.')
     else:
         initial = {
@@ -537,8 +564,8 @@ def api_suppliers_by_category(request):
     suppliers = Fournisseur.objects.filter(categories__id__in=ids).distinct().annotate(
         transaction_count=Count('demandes_approvisionnement')
     ).values(
-        'id', 'nom', 'email', 'delai_livraison_jours', 'prix_reference', 'transaction_count'
-    ).order_by('delai_livraison_jours', 'prix_reference', 'nom')
+        'id', 'nom', 'email', 'transaction_count'
+    ).order_by('nom')
 
     return JsonResponse({'suppliers': list(suppliers)})
 
@@ -689,8 +716,6 @@ def edit_demande(request, pk):
                         error_messages.append(f"Objet: {error}")
                     elif field == 'message':
                         error_messages.append(f"Message: {error}")
-                    elif field == 'delai_max_jours':
-                        error_messages.append(f"Délai maximum: {error}")
                     elif field == 'fournisseurs':
                         error_messages.append(f"Fournisseurs: {error}")
                     else:

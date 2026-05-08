@@ -18,7 +18,7 @@
   <h2 class="mb-4 text-xl font-bold text-sky-950">Fournisseurs existants</h2>
   <div class="mb-4 flex items-center justify-between">
     <form method="get" class="flex items-center gap-2">
-      <input name="q" value="{{ q|default:'' }}" placeholder="Rechercher par nom" class="rounded-md border px-3 py-2 text-sm" />
+      <input name="q" value="{{ q|default:'' }}" placeholder="Rechercher par nom ou catégorie" class="rounded-md border px-3 py-2 text-sm" />
       <button type="submit" class="rounded-full bg-sky-600 text-white px-3 py-1 text-sm">Rechercher</button>
       {% if q %}<a href="{% url 'transactions:create_fournisseur' %}" class="ml-2 text-sm text-slate-500">Réinitialiser</a>{% endif %}
     </form>
@@ -32,8 +32,6 @@
           <tr>
             <th class="bg-sky-950 px-4 py-3 text-left text-sm font-bold text-amber-300">Nom</th>
             <th class="bg-sky-950 px-4 py-3 text-left text-sm font-bold text-amber-300">Email</th>
-            <th class="bg-sky-950 px-4 py-3 text-left text-sm font-bold text-amber-300">Délai (jours)</th>
-            <th class="bg-sky-950 px-4 py-3 text-left text-sm font-bold text-amber-300">Prix référence</th>
             <th class="bg-sky-950 px-4 py-3 text-left text-sm font-bold text-amber-300">Catégories</th>
             <th class="bg-sky-950 px-4 py-3 text-left text-sm font-bold text-amber-300">Actions</th>
           </tr>
@@ -43,8 +41,6 @@
           <tr class="border-t border-slate-100 hover:bg-slate-50" data-supplier-id="{{ supplier.pk }}">
             <td class="px-4 py-3 font-semibold text-sky-950">{{ supplier.nom }}</td>
             <td class="px-4 py-3 text-slate-600">{{ supplier.email|default:"—" }}</td>
-            <td class="px-4 py-3 text-center text-slate-600">{{ supplier.delai_livraison_jours }}</td>
-            <td class="px-4 py-3 text-center text-slate-600">{{ supplier.prix_reference }}</td>
             <td class="px-4 py-3 text-slate-600 text-sm">
               {% for cat in supplier.categories.all %}
                 <span class="inline-block bg-sky-100 text-sky-800 rounded-full px-2 py-1 mr-1 mb-1">{{ cat.nom }}</span>
@@ -121,15 +117,7 @@
         <label class="mb-2 block text-sm font-semibold text-slate-700">Email</label>
         {{ form.email }}
       </div>
-      <div>
-        <label class="mb-2 block text-sm font-semibold text-slate-700">Délai moyen de livraison</label>
-        {{ form.delai_livraison_jours }}
-      </div>
-      <div>
-        <label class="mb-2 block text-sm font-semibold text-slate-700">Prix de référence</label>
-        {{ form.prix_reference }}
-      </div>
-    </div>
+          </div>
     <div class="mt-5">
       <label class="mb-2 block text-sm font-semibold text-slate-700">Note</label>
       {{ form.note }}
