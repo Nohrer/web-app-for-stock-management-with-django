@@ -1,16 +1,7 @@
-{% extends 'dashboard.html' %}
+{% extends page_temp %}
 {% block header %}Fournisseurs{% endblock %}
 {% block title %}Fournisseurs{% endblock %}
 {% block main %}
-{% if messages %}
-  <ul class="messages">
-    {% for message in messages %}
-    <div class="flex items-center bg-sky-600 text-white text-sm font-bold px-4 py-3 rounded-md mb-3" role="alert">
-      <li{% if message.tags %} class="{{ message.tags }}"{% endif %}>{{ message }}</li>
-    </div>
-    {% endfor %}
-  </ul>
-{% endif %}
 
 <div class="flex items-center justify-between gap-4 mb-6">
   <div>

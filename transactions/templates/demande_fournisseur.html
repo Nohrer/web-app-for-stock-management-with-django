@@ -2,15 +2,6 @@
 {% block title %}Demande Fournisseurs{% endblock %}
 {% block header %}Demande Fournisseurs{% endblock %}
 {% block main %}
-{% if messages %}
-  <ul class="messages mb-4">
-    {% for message in messages %}
-    <div class="flex items-center bg-sky-600 text-white text-sm font-bold px-4 py-3 rounded-md mb-3" role="alert">
-      <li{% if message.tags %} class="{{ message.tags }}"{% endif %}>{{ message }}</li>
-    </div>
-    {% endfor %}
-  </ul>
-{% endif %}
 
 <div class="mb-6 flex items-center justify-between gap-4">
   <div>
@@ -163,14 +154,64 @@
   </section>
 
   <div class="flex justify-center gap-4">
-    <button type="submit" name="action" value="save" class="w-1/2 rounded-full bg-amber-500 px-8 py-4 text-sm font-semibold uppercase tracking-wide text-white shadow-lg hover:bg-amber-600 transition lg:w-1/4">
-      Enregistrer (Brouillon)
+    <button type="button" id="save-btn" class="w-1/2 rounded-full bg-amber-500 px-8 py-4 text-sm font-semibold uppercase tracking-wide text-white shadow-lg hover:bg-amber-600 transition lg:w-1/4">
+      Enregistrer
     </button>
-    <button type="submit" name="action" value="send" class="w-1/2 rounded-full bg-sky-950 px-8 py-4 text-sm font-semibold uppercase tracking-wide text-white shadow-lg hover:bg-sky-900 transition lg:w-1/4">
+      <button type="submit" name="action" value="send" class="w-1/2 rounded-full bg-sky-950 px-8 py-4 text-sm font-semibold uppercase tracking-wide text-white shadow-lg hover:bg-sky-900 transition lg:w-1/4">
       Envoyer (Email)
     </button>
   </div>
 </form>
+
+  <div id="mail-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/70 px-4">
+    <div class="w-full max-w-xl rounded-3xl bg-white p-6 shadow-2xl">
+      <div class="flex items-start justify-between gap-4">
+        <div>
+          <h3 class="text-2xl font-bold text-sky-950">Ouverture du client mail</h3>
+          <p class="mt-2 text-sm text-slate-500">Si plusieurs fournisseurs ont été sélectionnés, chaque email s'ouvre dans un nouvel onglet.</p>
+        </div>
+        <button type="button" id="close-mail-modal" class="rounded-full bg-slate-100 px-3 py-1 text-sm font-semibold text-slate-700 hover:bg-slate-200">Fermer</button>
+      </div>
+      <div id="mail-modal-message" class="mt-5 text-sm text-slate-600"></div>
+      <ul id="mail-links-list" class="mt-4 space-y-2 max-h-72 overflow-y-auto"></ul>
+    </div>
+  </div>
+
+  <!-- Save Confirmation Modal -->
+  <div id="save-confirm-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/70 px-4">
+    <div class="w-full max-w-xl rounded-3xl bg-white p-6 shadow-2xl">
+      <div class="flex items-start justify-between gap-4">
+        <div>
+          <h3 class="text-2xl font-bold text-sky-950">Confirmer l'enregistrement</h3>
+          <p class="mt-2 text-sm text-slate-500">Voulez-vous envoyer les emails aux fournisseurs après l'enregistrement ?</p>
+        </div>
+        <button type="button" id="close-save-modal" class="rounded-full bg-slate-100 px-3 py-1 text-sm font-semibold text-slate-700 hover:bg-slate-200">Fermer</button>
+      </div>
+      <div class="mt-6 flex gap-3">
+        <button type="button" id="save-draft-btn" class="flex-1 rounded-full bg-amber-500 px-4 py-3 text-sm font-semibold text-white hover:bg-amber-600 transition">
+          Enregistrer (Brouillon)
+        </button>
+        <button type="button" id="save-and-send-btn" class="flex-1 rounded-full bg-sky-950 px-4 py-3 text-sm font-semibold text-white hover:bg-sky-900 transition">
+          Enregistrer et Envoyer
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Save and Send Modal (similar to mail modal) -->
+  <div id="save-send-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/70 px-4">
+    <div class="w-full max-w-xl rounded-3xl bg-white p-6 shadow-2xl">
+      <div class="flex items-start justify-between gap-4">
+        <div>
+          <h3 class="text-2xl font-bold text-sky-950">Demande enregistrée - Ouverture du client mail</h3>
+          <p class="mt-2 text-sm text-slate-500">Si plusieurs fournisseurs ont été sélectionnés, chaque email s'ouvre dans un nouvel onglet.</p>
+        </div>
+        <button type="button" id="close-save-send-modal" class="rounded-full bg-slate-100 px-3 py-1 text-sm font-semibold text-slate-700 hover:bg-slate-200">Fermer</button>
+      </div>
+      <div id="save-send-modal-message" class="mt-5 text-sm text-slate-600"></div>
+      <ul id="save-send-links-list" class="mt-4 space-y-2 max-h-72 overflow-y-auto"></ul>
+    </div>
+  </div>
 
 {{ categories_json|json_script:"categories-data" }}
 {{ debug_demande|json_script:"debug-demande-data" }}
@@ -192,6 +233,25 @@
   const allCategoriesDb = Array.isArray(rawCategoriesData)
     ? rawCategoriesData
     : JSON.parse(rawCategoriesData || '[]');
+  const requestForm = document.getElementById('request-form');
+  const sendButton = requestForm.querySelector('button[name="action"][value="send"]');
+  const modal = document.getElementById('mail-modal');
+  const modalMessage = document.getElementById('mail-modal-message');
+  const modalLinksList = document.getElementById('mail-links-list');
+  const closeModalButton = document.getElementById('close-mail-modal');
+  
+  // Save confirmation modal elements
+  const saveBtn = document.getElementById('save-btn');
+  const saveConfirmModal = document.getElementById('save-confirm-modal');
+  const closeSaveModalBtn = document.getElementById('close-save-modal');
+  const saveDraftBtn = document.getElementById('save-draft-btn');
+  const saveAndSendBtn = document.getElementById('save-and-send-btn');
+  
+  // Save and send modal elements (similar to mail modal)
+  const saveSendModal = document.getElementById('save-send-modal');
+  const saveSendModalMessage = document.getElementById('save-send-modal-message');
+  const saveSendLinksList = document.getElementById('save-send-links-list');
+  const closeSaveSendModalBtn = document.getElementById('close-save-send-modal');
   let activeCategoryIds = [];
   let previousMainCategoryValue = '';
   let previousSubCategoryValue = '';
@@ -259,6 +319,198 @@
   // Initialize event listeners
   addMoreBtn.addEventListener('click', add_new_form);
   formCopyTarget.addEventListener('click', handleFormDelete);
+
+  function openMailModal(payload) {
+    const links = payload.links || [];
+    modalMessage.textContent = payload.message || 'Demande enregistrée.';
+    modalLinksList.innerHTML = links.map(item => `
+      <li>
+        <a href="${item.url}" target="_blank" rel="noopener noreferrer" class="block rounded-2xl border border-slate-200 px-4 py-3 text-sky-700 hover:bg-sky-50 hover:border-sky-300 transition">
+          Ouvrir le mail pour ${item.name} (${item.email})
+        </a>
+      </li>
+    `).join('');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+  }
+
+  function payloadFromHtml(htmlText) {
+    const documentParser = new DOMParser();
+    const parsedDocument = documentParser.parseFromString(htmlText, 'text/html');
+    const links = Array.from(parsedDocument.querySelectorAll('a[href^="mailto:"]')).map(anchor => {
+      const href = anchor.getAttribute('href') || '';
+      const label = (anchor.textContent || '').trim();
+      const match = label.match(/Ouvrir le mail pour\s*(.*?)\s*\((.*?)\)$/i);
+      return {
+        url: href,
+        name: match ? match[1] : label || href,
+        email: match ? match[2] : href.replace(/^mailto:/i, '').split('?')[0],
+      };
+    });
+    const messageNode = parsedDocument.querySelector('body > p');
+    return {
+      message: messageNode ? messageNode.textContent.trim() : 'Demande enregistrée.',
+      links,
+    };
+  }
+
+  function closeMailModal() {
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  }
+
+  closeModalButton.addEventListener('click', closeMailModal);
+  modal.addEventListener('click', (event) => {
+    if (event.target === modal) {
+      closeMailModal();
+    }
+  });
+
+  // Save confirmation modal functions
+  function openSaveConfirmModal() {
+    saveConfirmModal.classList.remove('hidden');
+    saveConfirmModal.classList.add('flex');
+  }
+
+  function closeSaveConfirmModal() {
+    saveConfirmModal.classList.add('hidden');
+    saveConfirmModal.classList.remove('flex');
+  }
+
+  // Save confirmation modal event listeners
+  saveBtn.addEventListener('click', openSaveConfirmModal);
+  closeSaveModalBtn.addEventListener('click', closeSaveConfirmModal);
+  saveConfirmModal.addEventListener('click', (event) => {
+    if (event.target === saveConfirmModal) {
+      closeSaveConfirmModal();
+    }
+  });
+
+  // Handle save draft button
+  saveDraftBtn.addEventListener('click', () => {
+    closeSaveConfirmModal();
+    // Create a hidden input to set the action to 'save' and submit the form
+    const actionInput = document.createElement('input');
+    actionInput.type = 'hidden';
+    actionInput.name = 'action';
+    actionInput.value = 'save';
+    requestForm.appendChild(actionInput);
+    requestForm.submit();
+  });
+
+  // Save and send modal functions
+  function openSaveSendModal(payload) {
+    const links = payload.links || [];
+    saveSendModalMessage.textContent = payload.message || 'Demande enregistrée.';
+    saveSendLinksList.innerHTML = links.map(item => `
+      <li>
+        <a href="${item.url}" target="_blank" rel="noopener noreferrer" class="block rounded-2xl border border-slate-200 px-4 py-3 text-sky-700 hover:bg-sky-50 hover:border-sky-300 transition">
+          Ouvrir le mail pour ${item.name} (${item.email})
+        </a>
+      </li>
+    `).join('');
+    saveSendModal.classList.remove('hidden');
+    saveSendModal.classList.add('flex');
+  }
+
+  function closeSaveSendModal() {
+    saveSendModal.classList.add('hidden');
+    saveSendModal.classList.remove('flex');
+  }
+
+  // Handle save and send button
+  saveAndSendBtn.addEventListener('click', async () => {
+    closeSaveConfirmModal();
+    
+    try {
+      const formData = new FormData(requestForm);
+      formData.set('action', 'send');
+
+      const submitUrl = requestForm.getAttribute('action') || window.location.href;
+      const response = await fetch(submitUrl, {
+        method: 'POST',
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest',
+          'Accept': 'application/json',
+        },
+        body: formData,
+      });
+
+      const responseText = await response.text();
+      let data = null;
+
+      try {
+        data = JSON.parse(responseText);
+      } catch (jsonError) {
+        data = payloadFromHtml(responseText);
+      }
+
+      const payload = data && data.payload ? data.payload : data;
+      if (!payload || !Array.isArray(payload.links)) {
+        throw new Error('Impossible de préparer les liens mail.');
+      }
+
+      openSaveSendModal(payload);
+    } catch (error) {
+      alert(error.message || 'Erreur lors de la préparation des emails.');
+    }
+  });
+
+  // Save and send modal event listeners
+  closeSaveSendModalBtn.addEventListener('click', closeSaveSendModal);
+  saveSendModal.addEventListener('click', (event) => {
+    if (event.target === saveSendModal) {
+      closeSaveSendModal();
+    }
+  });
+
+  requestForm.addEventListener('submit', async (event) => {
+    const actionButton = event.submitter || (document.activeElement && document.activeElement.name === 'action' ? document.activeElement : null);
+    const isSendAction = actionButton && actionButton.value === 'send';
+    if (!isSendAction) {
+      return;
+    }
+
+    event.preventDefault();
+    sendButton.disabled = true;
+    sendButton.classList.add('opacity-70', 'cursor-wait');
+
+    try {
+      const formData = new FormData(requestForm);
+      formData.set('action', 'send');
+
+      const submitUrl = requestForm.getAttribute('action') || window.location.href;
+      const response = await fetch(submitUrl, {
+        method: 'POST',
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest',
+          'Accept': 'application/json',
+        },
+        body: formData,
+      });
+
+      const responseText = await response.text();
+      let data = null;
+
+      try {
+        data = JSON.parse(responseText);
+      } catch (jsonError) {
+        data = payloadFromHtml(responseText);
+      }
+
+      const payload = data && data.payload ? data.payload : data;
+      if (!payload || !Array.isArray(payload.links)) {
+        throw new Error('Impossible de préparer les liens mail.');
+      }
+
+      openMailModal(payload);
+    } catch (error) {
+      alert(error.message || 'Erreur lors de la préparation des emails.');
+    } finally {
+      sendButton.disabled = false;
+      sendButton.classList.remove('opacity-70', 'cursor-wait');
+    }
+  });
 
   function normalizeName(value) {
     return String(value || '').trim().toLowerCase();

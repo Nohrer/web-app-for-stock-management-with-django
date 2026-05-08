@@ -44,6 +44,26 @@
     </style>
   </head>
   <body class="leading-normal tracking-normal ">
+    {% if messages %}
+      <div class="fixed top-4 right-4 z-50 space-y-2 max-w-md">
+        {% for message in messages %}
+          <div class="flex items-center px-4 py-3 rounded-lg shadow-lg text-white text-sm font-medium
+            {% if message.tags == 'success' %}bg-green-500
+            {% elif message.tags == 'error' %}bg-red-500
+            {% elif message.tags == 'warning' %}bg-amber-500
+            {% elif message.tags == 'info' %}bg-blue-500
+            {% else %}bg-sky-600{% endif %}"
+            role="alert">
+            <span class="flex-1">{{ message }}</span>
+            <button type="button" class="ml-4 text-white hover:text-gray-200" onclick="this.parentElement.remove()">
+              <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path>
+              </svg>
+            </button>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
     {% block content %} {% endblock %}
   </body>
 </html>

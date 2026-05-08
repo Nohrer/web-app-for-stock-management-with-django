@@ -1,4 +1,4 @@
-from django.forms import ModelForm, inlineformset_factory
+from django.forms import ModelForm, inlineformset_factory, BaseInlineFormSet
 
 from .models import (
     Bulletin_de_commande,
@@ -214,6 +214,17 @@ class DemandeApprovisionnementForm(forms.ModelForm):
             else:
                 # both empty — surface a clear error on categories
                 self.add_error('categories', 'Veuillez sélectionner au moins une catégorie.')
+        
+        # Validate that at least one fournisseur is selected
+        fournisseurs = cleaned.get('fournisseurs')
+        if not fournisseurs or not fournisseurs.exists():
+            self.add_error('fournisseurs', 'Veuillez sélectionner au moins un fournisseur.')
+        
+        # Validate that date is today or in the future
+        date = cleaned.get('date')
+        if date and date < timezone.now().date():
+            self.add_error('date', 'La date ne peut pas être dans le passé. Veuillez sélectionner aujourd\'hui ou une date future.')
+        
         return self.cleaned_data
 
 
@@ -225,6 +236,38 @@ class DemandeApprovisionnementLigneForm(forms.ModelForm):
             'produit': forms.Select(attrs={'class': 'w-full rounded-xl border-slate-300 shadow-sm focus:border-sky-500 focus:ring-sky-500'}),
             'quantite': forms.NumberInput(attrs={'class': 'w-full rounded-xl border-slate-300 shadow-sm focus:border-sky-500 focus:ring-sky-500'}),
         }
+    
+    def clean(self):
+        cleaned_data = super().clean()
+        produit = cleaned_data.get('produit')
+        quantite = cleaned_data.get('quantite')
+        
+        # If this is an empty form (no product selected), don't validate further
+        if not produit:
+            return cleaned_data
+        
+        # If a product is selected, quantity must be provided and positive
+        if not quantite or quantite <= 0:
+            raise forms.ValidationError("La quantité doit être supérieure à 0.")
+        
+        return cleaned_data
+
+
+class DemandeApprovisionnementLigneFormSet(BaseInlineFormSet):
+    def clean(self):
+        super().clean()
+        
+        # Check if at least one form has a product selected
+        has_product = False
+        for form in self.forms:
+            if form.cleaned_data and not form.cleaned_data.get('DELETE'):
+                produit = form.cleaned_data.get('produit')
+                if produit:
+                    has_product = True
+                    break
+        
+        if not has_product:
+            raise forms.ValidationError("Vous devez ajouter au moins un produit à la demande.")
 
 
 DemandeApprovisionnementLigneFormSet = inlineformset_factory(
@@ -234,4 +277,5 @@ DemandeApprovisionnementLigneFormSet = inlineformset_factory(
     fields=('produit', 'quantite'),
     extra=1,
     can_delete=False,
+    formset=DemandeApprovisionnementLigneFormSet,
 )

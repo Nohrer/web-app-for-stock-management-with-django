@@ -137,11 +137,12 @@ def _build_category_filter_options(categories_qs):
 
 #FOURNISSEUR
 @login_required
-@user_passes_test(lambda user: user.is_magasinier)
+@user_passes_test(lambda user: user.is_magasinier or user.is_directeur)
 def create_fournisseur(request):
     employe = Employee.objects.get(user=request.user)
     nom = employe.nom
     prenom = employe.prenom
+    page_temp = 'dashboard_directeur.html' if request.user.is_directeur else 'dashboard.html'
     # support search and pagination for the suppliers list
     q = request.GET.get('q', '').strip()
     suppliers_qs = Fournisseur.objects.all().order_by('nom')
@@ -166,6 +167,7 @@ def create_fournisseur(request):
         'form': form,
         'nom': nom,
         'prenom': prenom,
+        'page_temp': page_temp,
         'suppliers': suppliers,
         'q': q,
         'page_obj': suppliers,
@@ -181,6 +183,7 @@ def edit_fournisseur(request, pk):
     employe = Employee.objects.get(user=request.user)
     nom = employe.nom
     prenom = employe.prenom
+    page_temp = 'dashboard_directeur.html' if request.user.is_directeur else 'dashboard.html'
 
     # reuse search/pagination for the list on the edit page
     q = request.GET.get('q', '').strip()
@@ -206,6 +209,7 @@ def edit_fournisseur(request, pk):
         'form': form,
         'nom': nom,
         'prenom': prenom,
+        'page_temp': page_temp,
         'suppliers': suppliers,
         'q': q,
         'page_obj': suppliers,
@@ -227,37 +231,44 @@ def delete_fournisseur(request, pk):
         return JsonResponse({'ok': False, 'error': str(e)}, status=500)
 
 
-def _build_supply_request_mailto(demande, employee_name):
-    supplier_emails = [fournisseur.email for fournisseur in demande.fournisseurs.all() if fournisseur.email]
-    if not supplier_emails:
-        return None
-
+def _build_supply_request_mailto_urls(demande, employee_name):
     product_lines = [
         f"- {ligne.produit.libelle} ({ligne.produit.categorie.nom}) x {ligne.quantite}"
         for ligne in demande.lignes.select_related('produit').all()
     ]
-    supplier_lines = [
-        f"- {fournisseur.nom} | delai: {fournisseur.delai_livraison_jours} jours | prix ref: {fournisseur.prix_reference} | email: {fournisseur.email or 'N/A'}"
-        for fournisseur in demande.fournisseurs.all()
-    ]
 
-    body = '\n'.join([
-        f"Bonjour {demande.fournisseurs.first().nom if demande.fournisseurs.exists() else 'partenaire'},",
-        '',
-        f"Une nouvelle demande d'approvisionnement a été préparée par {employee_name}.",
-        f"Catégorie cible: {demande.categorie.nom}",
-        f"Délai maximal souhaité: {demande.delai_max_jours or 'non précisé'} jours",
-        '',
-        'Produits demandés:',
-        *product_lines,
-        '',
-        'Fournisseurs sélectionnés:',
-        *supplier_lines,
-        '',
-        f"Message: {demande.message or 'Aucun message complémentaire.'}",
-    ])
+    mailto_urls = []
+    for fournisseur in demande.fournisseurs.all():
+        if not fournisseur.email:
+            continue
 
-    return f"mailto:{','.join(supplier_emails)}?{urlencode({'subject': demande.objet, 'body': body}, quote_via=quote)}"
+        body = '\n'.join([
+            f"Bonjour {fournisseur.nom},",
+            '',
+            f"Une nouvelle demande d'approvisionnement a été préparée par {employee_name}.",
+            f"Catégorie cible: {demande.categorie.nom}",
+            f"Délai maximal souhaité: {demande.delai_max_jours or 'non précisé'} jours",
+            '',
+            'Produits demandés:',
+            *product_lines,
+            '',
+            f"Message: {demande.message or 'Aucun message complémentaire.'}",
+        ])
+        mailto_urls.append({
+            'name': fournisseur.nom,
+            'email': fournisseur.email,
+            'url': f"mailto:{fournisseur.email}?{urlencode({'subject': demande.objet, 'body': body}, quote_via=quote)}",
+        })
+
+    return mailto_urls
+
+
+def _build_supply_request_mail_payload(demande, employee_name):
+    mailto_urls = _build_supply_request_mailto_urls(demande, employee_name)
+    return {
+        'links': mailto_urls,
+        'count': len(mailto_urls),
+    }
 
 
 @login_required
@@ -291,9 +302,25 @@ def demande_fournisseur(request):
 
     if request.method == 'POST':
         action = request.POST.get('action')
+        
+        # Get selected supplier IDs from the form to ensure they're included in the queryset
+        selected_supplier_ids = [int(id) for id in request.POST.getlist('fournisseurs') if id.isdigit()]
+        
+        # Create a queryset that includes both filtered suppliers AND any selected suppliers
+        # This prevents validation errors when category filtering changes between page load and submission
+        if selected_supplier_ids:
+            # Build a fresh queryset that includes all necessary suppliers to avoid distinct() conflicts
+            form_fournisseurs_qs = Fournisseur.objects.filter(
+                Q(id__in=selected_supplier_ids) |
+                (Q(categories__id__in=selected_categories) if selected_categories else Q()) |
+                (Q(delai_livraison_jours__lte=selected_delai) if selected_delai else Q())
+            ).distinct()
+        else:
+            form_fournisseurs_qs = fournisseurs_qs
+        
         demande_form = DemandeApprovisionnementForm(
             request.POST,
-            fournisseurs_queryset=fournisseurs_qs,
+            fournisseurs_queryset=form_fournisseurs_qs,
         )
         formset = DemandeApprovisionnementLigneFormSet(
             request.POST,
@@ -320,11 +347,11 @@ def demande_fournisseur(request):
             formset.save()
 
             if action == 'send':
-                mailto_url = _build_supply_request_mailto(
+                mail_payload = _build_supply_request_mail_payload(
                     demande,
                     f'{nom} {prenom}',
                 )
-                if not mailto_url:
+                if not mail_payload['links']:
                     messages.warning(request, 'Demande enregistrée, mais aucun fournisseur avec email valide n\'a été trouvé.')
                     return redirect('transactions:demande_fournisseur')
 
@@ -332,15 +359,26 @@ def demande_fournisseur(request):
                 demande.etat = 'sent'
                 demande.save(update_fields=['email_envoye', 'etat'])
                 messages.success(request, 'Demande enregistrée. Mail Envoyée.')
-                # Return a small HTML page that triggers a client-side navigation
-                # to the mailto: URL. Django disallows server-side redirects to
-                # non-http(s) schemes, so use JS to open the user's mail client.
+                if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or 'application/json' in request.headers.get('Accept', ''):
+                    return JsonResponse({
+                        'ok': True,
+                        'message': 'Demande enregistrée. Mail Envoyée.',
+                        'payload': mail_payload,
+                    })
+
+                mailto_links_html = ''.join(
+                    f'<li class="mb-2"><a href="{item["url"]}" target="_blank" rel="noopener noreferrer" class="text-sky-700 underline">Ouvrir le mail pour {item["name"]} ({item["email"]})</a></li>'
+                    for item in mail_payload['links']
+                )
+                mailto_urls_json = json.dumps([item['url'] for item in mail_payload['links']])
                 html = (
-                    '<!doctype html><html><head><meta charset="utf-8"><title>Open Mail'
-                    ' Client</title></head><body>'
+                    '<!doctype html><html><head><meta charset="utf-8"><title>Open Mail Client</title>'
+                    '<style>body{font-family:system-ui,sans-serif;padding:24px;color:#0f172a}a{display:inline-block;margin-top:8px}</style>'
+                    '</head><body>'
                     '<p>Ouverture du client mail...</p>'
-                    f'<p><a href="{mailto_url}" target="_blank" rel="noopener noreferrer">Ouvrir le client mail</a></p>'
-                    '<script>(function(){try{window.open(' + json.dumps(mailto_url) + ', "_blank");}catch(e){window.location.href=' + json.dumps(mailto_url) + ';}})();</script>'
+                    '<p>Si plusieurs fournisseurs ont été sélectionnés, chaque email s\'ouvre dans un nouvel onglet.</p>'
+                    f'<ul>{mailto_links_html}</ul>'
+                    f'<script>(function(){{var urls={mailto_urls_json};for(var i=0;i<urls.length;i++){{try{{window.open(urls[i],"_blank","noopener,noreferrer");}}catch(e){{}}}}}})();</script>'
                     '</body></html>'
                 )
                 return HttpResponse(html)
@@ -348,7 +386,55 @@ def demande_fournisseur(request):
             messages.success(request, 'Demande enregistrée (brouillon).')
             return redirect('transactions:demande_fournisseur')
 
-        messages.error(request, 'Veuillez corriger les erreurs du formulaire.')
+        # Build detailed error messages
+        error_messages = []
+        
+        # Check main form errors
+        if not demande_form.is_valid():
+            for field, errors in demande_form.errors.items():
+                for error in errors:
+                    if field == 'categories':
+                        error_messages.append(f"Catégorie: {error}")
+                    elif field == 'date':
+                        error_messages.append(f"Date: {error}")
+                    elif field == 'objet':
+                        error_messages.append(f"Objet: {error}")
+                    elif field == 'message':
+                        error_messages.append(f"Message: {error}")
+                    elif field == 'delai_max_jours':
+                        error_messages.append(f"Délai maximum: {error}")
+                    elif field == 'fournisseurs':
+                        error_messages.append(f"Fournisseurs: {error}")
+                    else:
+                        error_messages.append(f"{field.title()}: {error}")
+        
+        # Check formset errors
+        if not formset.is_valid():
+            for i, form_errors in enumerate(formset.errors):
+                if form_errors:
+                    for field, errors in form_errors.items():
+                        for error in errors:
+                            if field == 'produit':
+                                error_messages.append(f"Ligne {i+1} - Produit: {error}")
+                            elif field == 'quantite':
+                                error_messages.append(f"Ligne {i+1} - Quantité: {error}")
+                            elif field == 'id':
+                                # Skip ID field validation - it's auto-generated
+                                continue
+                            else:
+                                error_messages.append(f"Ligne {i+1} - {field.title()}: {error}")
+            
+            # Check non-form errors (like empty forms)
+            if formset.non_form_errors():
+                for error in formset.non_form_errors():
+                    error_messages.append(f"Erreur globale: {error}")
+        
+        # Display specific error messages or fallback
+        if error_messages:
+            for msg in error_messages[:5]:  # Limit to first 5 errors to avoid overwhelming
+                messages.error(request, msg)
+        else:
+            messages.error(request, 'Veuillez corriger les erreurs du formulaire.')
     else:
         initial = {
             'date': timezone.now().date().isoformat(),
@@ -552,8 +638,8 @@ def edit_demande(request, pk):
             formset.save()
 
             if action == 'send':
-                mailto_url = _build_supply_request_mailto(demande, f"{employe.nom} {employe.prenom}")
-                if not mailto_url:
+                mail_payload = _build_supply_request_mail_payload(demande, f"{employe.nom} {employe.prenom}")
+                if not mail_payload['links']:
                     messages.warning(request, 'Demande mise à jour, mais aucun fournisseur avec email valide n\'a été trouvé.')
                     return redirect('transactions:historique_fournisseurs')
 
@@ -561,13 +647,26 @@ def edit_demande(request, pk):
                 demande.etat = 'sent'
                 demande.save(update_fields=['email_envoye', 'etat'])
                 messages.success(request, 'Demande mise à jour. Ouverture du client mail.')
-                # Use a client-side JS redirect to avoid DisallowedRedirect for mailto:
+                if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or 'application/json' in request.headers.get('Accept', ''):
+                    return JsonResponse({
+                        'ok': True,
+                        'message': 'Demande mise à jour. Ouverture du client mail.',
+                        'payload': mail_payload,
+                    })
+
+                mailto_links_html = ''.join(
+                    f'<li class="mb-2"><a href="{item["url"]}" target="_blank" rel="noopener noreferrer" class="text-sky-700 underline">Ouvrir le mail pour {item["name"]} ({item["email"]})</a></li>'
+                    for item in mail_payload['links']
+                )
+                mailto_urls_json = json.dumps([item['url'] for item in mail_payload['links']])
                 html = (
-                    '<!doctype html><html><head><meta charset="utf-8"><title>Open Mail'
-                    ' Client</title></head><body>'
+                    '<!doctype html><html><head><meta charset="utf-8"><title>Open Mail Client</title>'
+                    '<style>body{font-family:system-ui,sans-serif;padding:24px;color:#0f172a}a{display:inline-block;margin-top:8px}</style>'
+                    '</head><body>'
                     '<p>Ouverture du client mail...</p>'
-                    f'<p><a href="{mailto_url}" target="_blank" rel="noopener noreferrer">Ouvrir le client mail</a></p>'
-                    '<script>(function(){try{window.open(' + json.dumps(mailto_url) + ', "_blank");}catch(e){window.location.href=' + json.dumps(mailto_url) + ';}})();</script>'
+                    '<p>Si plusieurs fournisseurs ont été sélectionnés, chaque email s\'ouvre dans un nouvel onglet.</p>'
+                    f'<ul>{mailto_links_html}</ul>'
+                    f'<script>(function(){{var urls={mailto_urls_json};for(var i=0;i<urls.length;i++){{try{{window.open(urls[i],"_blank","noopener,noreferrer");}}catch(e){{}}}}}})();</script>'
                     '</body></html>'
                 )
                 return HttpResponse(html)
@@ -575,10 +674,55 @@ def edit_demande(request, pk):
             messages.success(request, 'Demande mise à jour.')
             return redirect('transactions:historique_fournisseurs')
 
-        print("[DEBUG] edit_demande form errors:", demande_form.errors.as_json())
-        print("[DEBUG] edit_demande formset errors:", formset.errors)
-        print("[DEBUG] edit_demande formset non_form_errors:", formset.non_form_errors())
-        messages.error(request, 'Veuillez corriger les erreurs du formulaire.')
+        # Build detailed error messages
+        error_messages = []
+        
+        # Check main form errors
+        if not demande_form.is_valid():
+            for field, errors in demande_form.errors.items():
+                for error in errors:
+                    if field == 'categories':
+                        error_messages.append(f"Catégorie: {error}")
+                    elif field == 'date':
+                        error_messages.append(f"Date: {error}")
+                    elif field == 'objet':
+                        error_messages.append(f"Objet: {error}")
+                    elif field == 'message':
+                        error_messages.append(f"Message: {error}")
+                    elif field == 'delai_max_jours':
+                        error_messages.append(f"Délai maximum: {error}")
+                    elif field == 'fournisseurs':
+                        error_messages.append(f"Fournisseurs: {error}")
+                    else:
+                        error_messages.append(f"{field.title()}: {error}")
+        
+        # Check formset errors
+        if not formset.is_valid():
+            for i, form_errors in enumerate(formset.errors):
+                if form_errors:
+                    for field, errors in form_errors.items():
+                        for error in errors:
+                            if field == 'produit':
+                                error_messages.append(f"Ligne {i+1} - Produit: {error}")
+                            elif field == 'quantite':
+                                error_messages.append(f"Ligne {i+1} - Quantité: {error}")
+                            elif field == 'id':
+                                # Skip ID field validation - it's auto-generated
+                                continue
+                            else:
+                                error_messages.append(f"Ligne {i+1} - {field.title()}: {error}")
+            
+            # Check non-form errors (like empty forms)
+            if formset.non_form_errors():
+                for error in formset.non_form_errors():
+                    error_messages.append(f"Erreur globale: {error}")
+        
+        # Display specific error messages or fallback
+        if error_messages:
+            for msg in error_messages[:5]:  # Limit to first 5 errors to avoid overwhelming
+                messages.error(request, msg)
+        else:
+            messages.error(request, 'Veuillez corriger les erreurs du formulaire.')
     else:
         # preserve the current date and categories when opening the edit form
         initial = {
