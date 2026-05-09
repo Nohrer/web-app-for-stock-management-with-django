@@ -1,5 +1,5 @@
 from decimal import Decimal
-from datetime import date
+from datetime import date, datetime, timedelta
 import random
 
 from django.core.management.base import BaseCommand
@@ -316,8 +316,10 @@ class Command(BaseCommand):
                 DemandeDeProduit.objects.create(bulletin=bulletin, produit_demande=products['ELEC-001'], quantite_demande=5)
                 DemandeDeProduit.objects.create(bulletin=bulletin, produit_demande=products['BUREAU-001'], quantite_demande=12)
 
+            today = date.today()
+            
             livraison, created = Bonne_livraison.objects.get_or_create(
-                date=date(2026, 5, 6),
+                date=today,
                 fournisseur=suppliers['Tech Distrib'],
                 type_bl=type_livraison,
             )
@@ -328,7 +330,7 @@ class Command(BaseCommand):
             demande, created = DemandeApprovisionnement.objects.get_or_create(
                 objet='Demande initiale approvisionnement electronique',
                 defaults={
-                    'date': date(2026, 5, 6),
+                    'date': today,
                     'categorie': categories['Electronique'],
                     'message': 'Demande de reference pour les achats technologiques.',
                     'email_envoye': True,
@@ -354,14 +356,13 @@ class Command(BaseCommand):
             for i in range(to_create):
                 employe = random.choice(employee_list)
                 state = random.choice(state_choices)
-                # Random date in recent years (2024-2026)
-                rand_year = random.choice([2024, 2025, 2026])
-                rand_month = random.randint(1, 12)
-                rand_day = random.randint(1, 28)
+                # Random date within last 30 days for variety
+                days_ago = random.randint(0, 30)
+                rand_date = today - timedelta(days=days_ago)
                 b = Bulletin_de_commande.objects.create(
                     employe=employe,
                     state=state,
-                    date=date(rand_year, rand_month, rand_day),
+                    date=rand_date,
                 )
                 # Add 1-5 random demande de produit lines
                 for _ in range(random.randint(1, 5)):

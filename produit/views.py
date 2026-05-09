@@ -130,7 +130,7 @@ def product_list(request):
     prenom = employee.prenom
     categories = Categorie.objects.all().order_by('nom')
     category_filter_options = _build_category_filter_options(categories)
-    products = Produit.objects.all()
+    products = Produit.objects.all().order_by('reference')
     selected_category_id = request.GET.get('categorie_id', '')
     page_number = request.GET.get('page', 1)
 
@@ -280,15 +280,27 @@ def product_state(request):
     selected_category_id = request.POST.get('categorie_id', '')
     selected_date = request.POST.get('date', '')
     if request.method == 'POST':
-        date = request.POST.get('date')
-        if date:
-            date_str = datetime.strptime(date, '%Y-%m-%d')
-            produits = Produit.history.as_of(
-                datetime.strptime(date, '%Y-%m-%d'))
+        date_str = request.POST.get('date')
+        if date_str:
+            selected_date_obj = datetime.strptime(date_str, '%Y-%m-%d').date()
+            today = timezone.now().date()
+            
+            if selected_date_obj > today:
+                # For future dates, show empty (no data yet)
+                produits = Produit.objects.none()
+            elif selected_date_obj == today:
+                # For today, show current products
+                produits = Produit.objects.all()
+            else:
+                # For past dates, use history
+                naive_datetime = datetime.combine(selected_date_obj, datetime.max.time())
+                aware_datetime = timezone.make_aware(naive_datetime)
+                produits = Produit.history.as_of(aware_datetime)
+            
             if selected_category_id:
                 produits = produits.filter(categorie_id=selected_category_id)
-            context = {'date': date_str, 'produits': produits,
-                       'nom': nom, 'prenom': prenom,'page_temp':page_temp,'categories':categories,'category_filter_options': category_filter_options,'selected_category_id': str(selected_category_id),'selected_date': selected_date}
+            context = {'date': selected_date_obj, 'produits': produits,
+                       'nom': nom, 'prenom': prenom,'page_temp':page_temp,'categories':categories,'category_filter_options': category_filter_options,'selected_category_id': str(selected_category_id),'selected_date': date_str}
             return render(request, 'produit_state.html', context)
         else:
             return render(request, 'produit_state.html', {'nom': nom, 'prenom': prenom,'page_temp':page_temp ,'categories':categories,'category_filter_options': category_filter_options,'selected_category_id': str(selected_category_id),'selected_date': selected_date})
