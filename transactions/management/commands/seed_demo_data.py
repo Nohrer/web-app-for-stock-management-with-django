@@ -100,23 +100,45 @@ class Command(BaseCommand):
                 ('Informatique', 'Materiel informatique et reseau'),
             ]
 
-            category_specs = []
-            for head_name, sub_names in category_hierarchy.items():
-                category_specs.append((head_name, f'Head category: {head_name}'))
-                for sub_name in sub_names:
-                    category_specs.append((sub_name, f'Sub category under {head_name}'))
-            category_specs.extend(legacy_categories)
-
+            # Create main categories first (without parents)
             categories = {}
-            for name, description in category_specs:
+            for head_name, sub_names in category_hierarchy.items():
+                # Create main category
+                main_cat, _ = Categorie.objects.get_or_create(
+                    nom=head_name,
+                    defaults={'description': f'Head category: {head_name}', 'magasin': magasin, 'parent': None},
+                )
+                if main_cat.description != f'Head category: {head_name}' or main_cat.magasin_id != magasin.id:
+                    main_cat.description = f'Head category: {head_name}'
+                    main_cat.magasin = magasin
+                    main_cat.parent = None
+                    main_cat.save(update_fields=['description', 'magasin', 'parent'])
+                categories[head_name] = main_cat
+                
+                # Create subcategories with parent set to main category
+                for sub_name in sub_names:
+                    sub_cat, _ = Categorie.objects.get_or_create(
+                        nom=sub_name,
+                        defaults={'description': f'Sub category under {head_name}', 'magasin': magasin, 'parent': main_cat},
+                    )
+                    if sub_cat.description != f'Sub category under {head_name}' or sub_cat.magasin_id != magasin.id or sub_cat.parent_id != main_cat.id:
+                        sub_cat.description = f'Sub category under {head_name}'
+                        sub_cat.magasin = magasin
+                        sub_cat.parent = main_cat
+                        sub_cat.save(update_fields=['description', 'magasin', 'parent'])
+                    categories[sub_name] = sub_cat
+            
+            # Create legacy categories (without parents)
+            for name, description in legacy_categories:
                 categorie, _ = Categorie.objects.get_or_create(
                     nom=name,
-                    defaults={'description': description, 'magasin': magasin},
+                    defaults={'description': description, 'magasin': magasin, 'parent': None},
                 )
                 if categorie.description != description or categorie.magasin_id != magasin.id:
                     categorie.description = description
                     categorie.magasin = magasin
-                    categorie.save(update_fields=['description', 'magasin'])
+                    categorie.parent = None
+                    categorie.save(update_fields=['description', 'magasin', 'parent'])
                 categories[name] = categorie
 
             product_specs = [
@@ -280,13 +302,17 @@ class Command(BaseCommand):
                     )
                     employees[username] = employee
 
-            bulletin, created = Bulletin_de_commande.objects.get_or_create(
+            # Get or create a demo bulletin - use first() if multiple exist
+            bulletin = Bulletin_de_commande.objects.filter(
                 employe=employees['employee_demo'],
-                defaults={'state': Bulletin_de_commande.DEMANDER},
-            )
-            if created or not bulletin.demandedeproduit_set.exists():
-                bulletin.state = Bulletin_de_commande.DEMANDER
-                bulletin.save(update_fields=['state'])
+                state=Bulletin_de_commande.DEMANDER
+            ).first()
+            if not bulletin:
+                bulletin = Bulletin_de_commande.objects.create(
+                    employe=employees['employee_demo'],
+                    state=Bulletin_de_commande.DEMANDER,
+                )
+            if not bulletin.demandedeproduit_set.exists():
                 DemandeDeProduit.objects.create(bulletin=bulletin, produit_demande=products['ELEC-001'], quantite_demande=5)
                 DemandeDeProduit.objects.create(bulletin=bulletin, produit_demande=products['BUREAU-001'], quantite_demande=12)
 

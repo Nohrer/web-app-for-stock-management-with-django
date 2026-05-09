@@ -37,100 +37,35 @@ from .models import Fournisseur
 
 
 def _build_category_filter_options(categories_qs):
-    """Build a single hierarchical category select matching the stock page filter."""
-    category_hierarchy = {
-        'X.All commodities': [
-            'EQUIPEMENT (EQUIPMENT, SERVICE & SPARES)',
-            'ELECTRICITE & INSTRUMENTATION (EQUIPMENT, SERVICE/INSTALLATION & SPARES)',
-            'INDUSTRIAL MAINTENANCE, EXTERNALISATION AND LOGICTICS',
-            'ARCHITECTURAL SERVICES',
-            'LANDSCAPING AND GARDENING',
-            'AUXILIARY MATERIAL AND UTILITIES',
-            'BULK SUPPLY',
-            'IT & TELECOM',
-            'Construction & Buildings',
-            'Equipements (Equipement, Service and Spares)',
-            'Electricity & Instrumentation (Equipement, Service/installation and Spares)',
-            'Industrial Maintenance, Externalisation and Logistics',
-            'Intelectual Services',
-            'Facility Management',
-            'Additives/Auxiliary Material and Utilities',
-            'Bulk supply',
-            'IT & Telecom',
-            'Duplicate Commodities',
-            'SAP Commodities',
-        ],
-        'A.Structural Mechanical Piping': [
-            'SMP General Contracting',
-            'Piping works',
-            'Structural works',
-            'Mechanical works',
-            'Industrial specialities',
-        ],
-        'B.Electrical & Instrumentation': [
-            'Electrical works',
-            'E&I General Contracting',
-        ],
-        'C.Civil Works': [
-            'Earthworks',
-            'Concrete Works',
-            'Building & Structures',
-            'Roads & Infrastructure',
-            'Temporary & Anxillary Works',
-            'Civil General Contracting',
-        ],
-        'D.Equipment': [
-            'Static Equipment',
-            'Rotating Equipment',
-            'Process Equipment',
-            'Air & Gas Systems',
-            'Utilities Equipment',
-            'Lifting Equipment',
-            'Handling Equipment',
-            'Separation Equipment',
-            'Packaged Units & Skids',
-            'Electrical & Power Systems',
-            'Instrumentation & Control Systems',
-            'Piping Materials',
-            'Inspection & Testing Services',
-            'Piping Supervision Services',
-            'Fabrication & Manufacturing Services',
-        ],
-    }
-
+    """Build a single hierarchical category select from database parent-child relationships."""
     categories_by_name = {c.nom: c for c in categories_qs}
+    categories_by_id = {c.id: c for c in categories_qs}
     options = []
     used_ids = set()
 
-    def add_group(header_name, fallback_sub_names):
-        header_category = categories_by_name.get(header_name)
-        if header_category is None:
-            return
-
-        options.append({'value': '', 'label': header_name, 'disabled': True})
-
-        child_categories = list(header_category.subcategories.all().order_by('nom'))
-        for sub_name in fallback_sub_names:
-            fallback_category = categories_by_name.get(sub_name)
-            if fallback_category is not None and fallback_category.parent_id is None:
-                child_categories.append(fallback_category)
-
-        seen_child_ids = set()
-        for category_obj in sorted(child_categories, key=lambda item: item.nom):
-            if category_obj.id in used_ids or category_obj.id in seen_child_ids:
-                continue
-            options.append({'value': str(category_obj.id), 'label': f'  - {category_obj.nom}', 'disabled': False})
-            used_ids.add(category_obj.id)
-            seen_child_ids.add(category_obj.id)
-
-    for head, sub_categories in category_hierarchy.items():
-        add_group(head, sub_categories)
-
-    remaining = [c for c in categories_qs if c.id not in used_ids and c.nom not in category_hierarchy]
-    if remaining:
-        options.append({'value': '', 'label': 'Autres catégories', 'disabled': True})
-        for category_obj in remaining:
-            options.append({'value': str(category_obj.id), 'label': f'  - {category_obj.nom}', 'disabled': False})
+    # Get main categories (those without parents)
+    main_categories = [c for c in categories_qs if c.parent_id is None]
+    
+    # Build dynamic hierarchy from database
+    for main_cat in sorted(main_categories, key=lambda c: c.nom):
+        # Check if this main category has subcategories
+        subcategories = [c for c in categories_qs if c.parent_id == main_cat.id]
+        
+        if subcategories:
+            # Add main category as header
+            options.append({'value': '', 'label': main_cat.nom, 'disabled': True})
+            used_ids.add(main_cat.id)
+            
+            # Add subcategories
+            for sub in sorted(subcategories, key=lambda c: c.nom):
+                if sub.id not in used_ids:
+                    options.append({'value': str(sub.id), 'label': f'  - {sub.nom}', 'disabled': False})
+                    used_ids.add(sub.id)
+        else:
+            # Main category without subcategories - add directly
+            if main_cat.id not in used_ids:
+                options.append({'value': str(main_cat.id), 'label': main_cat.nom, 'disabled': False})
+                used_ids.add(main_cat.id)
 
     return options
 
@@ -478,7 +413,8 @@ def demande_fournisseur(request):
             prefix='lignes',
         )
 
-    categories_json = list(Categorie.objects.all().values('id', 'nom'))
+    categories_json = list(Categorie.objects.all().values('id', 'nom', 'parent', 'parent__nom'))
+    category_filter_options = _build_category_filter_options(Categorie.objects.all().order_by('nom'))
     
     return render(
         request,
@@ -489,6 +425,8 @@ def demande_fournisseur(request):
             'fournisseurs': fournisseurs_qs,
             'categories': Categorie.objects.all(),
             'categories_json': categories_json,
+            'category_filter_options': category_filter_options,
+            'selected_supplier_ids': [],
             'debug_demande': {},
             'nom': nom,
             'prenom': prenom,
@@ -784,12 +722,18 @@ def edit_demande(request, pk):
         debug_demande = {'error': str(e)}
         print("[DEBUG] edit_demande error while building debug_demande:", e)
 
+    categories_json = list(Categorie.objects.all().values('id', 'nom', 'parent', 'parent__nom'))
+    category_filter_options = _build_category_filter_options(Categorie.objects.all().order_by('nom'))
+    selected_supplier_ids = list(demande.fournisseurs.values_list('id', flat=True))
+    
     return render(request, 'demande_fournisseur.html', {
         'demande_form': demande_form,
         'formset': formset,
         'fournisseurs': fournisseurs_qs,
         'categories': Categorie.objects.all(),
-        'categories_json': list(Categorie.objects.all().values('id', 'nom')),
+        'categories_json': categories_json,
+        'category_filter_options': category_filter_options,
+        'selected_supplier_ids': selected_supplier_ids,
         'debug_demande': debug_demande,
         'nom': employe.nom,
         'prenom': employe.prenom,

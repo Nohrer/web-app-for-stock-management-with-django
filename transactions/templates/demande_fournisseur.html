@@ -74,18 +74,19 @@
             </tr>
           </thead>
           <tbody id="suppliers-body">
-            {% if demande_form.fournisseurs %}
-              {% for supplier in demande_form.fournisseurs %}
+            {% if fournisseurs %}
+              {% for supplier in fournisseurs %}
                 <tr class="border-b border-sky-700 hover:bg-sky-800">
-                  <td class="px-2 py-2">{{ supplier }}</td>
-                  <td class="px-2 py-2">{{ supplier.label }}</td>
-                  <td class="px-2 py-2 text-center">-</td>
-                  <td class="px-2 py-2 text-center">-</td>
+                  <td class="px-2 py-2">
+                    <input type="checkbox" name="fournisseurs" value="{{ supplier.id }}" id="id_fournisseur_{{ supplier.id }}" class="rounded border-slate-300 text-sky-600 focus:ring-sky-500" {% if supplier.id in selected_supplier_ids %}checked{% endif %}>
+                  </td>
+                  <td class="px-2 py-2">{{ supplier.nom }}</td>
+                  <td class="px-2 py-2 text-center">{{ supplier.demandes_approvisionnement.count|default:"0" }}</td>
                 </tr>
               {% endfor %}
             {% else %}
               <tr>
-                <td colspan="4" class="px-2 py-2 text-center text-slate-400">Sélectionnez une catégorie pour voir les fournisseurs disponibles.</td>
+                <td colspan="3" class="px-2 py-2 text-center text-slate-400">Sélectionnez une catégorie pour voir les fournisseurs disponibles.</td>
               </tr>
             {% endif %}
           </tbody>
@@ -210,6 +211,7 @@
 
 {{ categories_json|json_script:"categories-data" }}
 {{ debug_demande|json_script:"debug-demande-data" }}
+{{ category_filter_options|json_script:"category-filter-options" }}
 
 <script>
   const categorySelect = document.getElementById('id_categories');
@@ -252,65 +254,47 @@
   let previousMainCategoryValue = '';
   let previousSubCategoryValue = '';
 
-  const categoryHierarchy = {
-    'X.All commodities': [
-      'EQUIPEMENT (EQUIPMENT, SERVICE & SPARES)',
-      'ELECTRICITE & INSTRUMENTATION (EQUIPMENT, SERVICE/INSTALLATION & SPARES)',
-      'INDUSTRIAL MAINTENANCE, EXTERNALISATION AND LOGICTICS',
-      'ARCHITECTURAL SERVICES',
-      'LANDSCAPING AND GARDENING',
-      'AUXILIARY MATERIAL AND UTILITIES',
-      'BULK SUPPLY',
-      'IT & TELECOM',
-      'Construction & Buildings',
-      'Equipements (Equipement, Service and Spares)',
-      'Electricity & Instrumentation (Equipement, Service/installation and Spares)',
-      'Industrial Maintenance, Externalisation and Logistics',
-      'Intelectual Services',
-      'Facility Management',
-      'Additives/Auxiliary Material and Utilities',
-      'Bulk supply',
-      'IT & Telecom',
-      'Duplicate Commodities',
-      'SAP Commodities'
-    ],
-    'A.Structural Mechanical Piping': [
-      'SMP General Contracting',
-      'Piping works',
-      'Structural works',
-      'Mechanical works',
-      'Industrial specialities'
-    ],
-    'B.Electrical & Instrumentation': [
-      'Electrical works',
-      'E&I General Contracting'
-    ],
-    'C.Civil Works': [
-      'Earthworks',
-      'Concrete Works',
-      'Building & Structures',
-      'Roads & Infrastructure',
-      'Temporary & Anxillary Works',
-      'Civil General Contracting'
-    ],
-    'D.Equipment': [
-      'Static Equipment',
-      'Rotating Equipment',
-      'Process Equipment',
-      'Air & Gas Systems',
-      'Utilities Equipment',
-      'Lifting Equipment',
-      'Handling Equipment',
-      'Separation Equipment',
-      'Packaged Units & Skids',
-      'Electrical & Power Systems',
-      'Instrumentation & Control Systems',
-      'Piping Materials',
-      'Inspection & Testing Services',
-      'Piping Supervision Services',
-      'Fabrication & Manufacturing Services'
-    ]
-  };
+  // Build dynamic category hierarchy from database
+  function buildCategoryHierarchy() {
+    const hierarchy = {};
+    const categoriesWithParents = allCategoriesDb.filter(c => c.parent);
+    const categoriesWithoutParents = allCategoriesDb.filter(c => !c.parent);
+    
+    // Group subcategories by their parent
+    categoriesWithParents.forEach(sub => {
+      const parentName = sub.parent__nom || 'Autres catégories';
+      if (!hierarchy[parentName]) {
+        hierarchy[parentName] = [];
+      }
+      hierarchy[parentName].push(sub.nom);
+    });
+    
+    // Add main categories that have subcategories
+    categoriesWithoutParents.forEach(cat => {
+      const hasSubcategories = categoriesWithParents.some(sub => sub.parent === cat.id);
+      if (hasSubcategories && !hierarchy[cat.nom]) {
+        hierarchy[cat.nom] = [];
+      }
+    });
+    
+    // If no hierarchy built yet, use filter options as fallback
+    if (Object.keys(hierarchy).length === 0) {
+      const filterOptions = JSON.parse(document.getElementById('category-filter-options').textContent || '[]');
+      let currentParent = null;
+      filterOptions.forEach(opt => {
+        if (opt.disabled) {
+          currentParent = opt.label;
+          hierarchy[currentParent] = [];
+        } else if (currentParent && opt.label.startsWith('  - ')) {
+          hierarchy[currentParent].push(opt.label.replace('  - ', ''));
+        }
+      });
+    }
+    
+    return hierarchy;
+  }
+
+  const categoryHierarchy = buildCategoryHierarchy();
 
   // Initialize event listeners
   addMoreBtn.addEventListener('click', add_new_form);
@@ -733,7 +717,7 @@
       ? activeCategoryIds
       : Array.from(categorySelect.selectedOptions).map(o => o.value).filter(Boolean);
     if (selected.length === 0) {
-      suppliersBody.innerHTML = '<tr><td colspan="4" class="px-2 py-2 text-center text-slate-400">Sélectionnez une catégorie pour voir les fournisseurs disponibles.</td></tr>';
+      suppliersBody.innerHTML = '<tr><td colspan="3" class="px-2 py-2 text-center text-slate-400">Sélectionnez une catégorie pour voir les fournisseurs disponibles.</td></tr>';
       return;
     }
 
@@ -747,7 +731,7 @@
       })
       .then(data => {
         if (data.suppliers.length === 0) {
-          suppliersBody.innerHTML = '<tr><td colspan="4" class="px-2 py-2 text-center text-slate-400">Aucun fournisseur disponible pour ces catégories.</td></tr>';
+          suppliersBody.innerHTML = '<tr><td colspan="3" class="px-2 py-2 text-center text-slate-400">Aucun fournisseur disponible pour ces catégories.</td></tr>';
           return;
         }
 
@@ -760,14 +744,13 @@
               <input type="checkbox" name="fournisseurs" value="${supplier.id}" ${initialFournisseurIds.includes(supplier.id) || currentFournisseurIds.includes(supplier.id) ? 'checked' : ''} class="rounded border-sky-600 text-amber-500 focus:ring-amber-500">
             </td>
             <td class="px-2 py-2 text-sm">${supplier.nom}</td>
-            <td class="px-2 py-2 text-center text-sm">${supplier.delai_livraison_jours}</td>
-            <td class="px-2 py-2 text-center text-sm"><span class="bg-sky-700 px-2 py-1 rounded">${supplier.transaction_count}</span></td>
+            <td class="px-2 py-2 text-center text-sm"><span class="bg-sky-700 px-2 py-1 rounded">${supplier.transaction_count || 0}</span></td>
           </tr>
         `).join('');
       })
       .catch(error => {
         console.error('Error:', error);
-        suppliersBody.innerHTML = '<tr><td colspan="4" class="px-2 py-2 text-center text-slate-400">Erreur de chargement des fournisseurs.</td></tr>';
+        suppliersBody.innerHTML = '<tr><td colspan="3" class="px-2 py-2 text-center text-slate-400">Erreur de chargement des fournisseurs.</td></tr>';
       });
   }
 

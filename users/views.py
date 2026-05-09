@@ -27,7 +27,7 @@ def magasinier_login(request):
             if user.is_directeur:
 
                 login(request, user)
-                return redirect('users:dashboard_directeur')
+                return redirect('produit:product_list')
         else:
             messages.error(request, 'Invalid login.')
     else:
