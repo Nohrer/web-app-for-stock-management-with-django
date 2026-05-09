@@ -35,7 +35,7 @@ With the virtual environment active:
 pip install --upgrade pip
 pip install -r requirements.txt
 ```
-
+## SKIP ETAPE 5
 ## 5. Prepare the database
 Run migrations:
 
@@ -48,7 +48,7 @@ Populate demo data:
 ```bash
 python manage.py seed_demo_data
 ```
-
+### ---------------------------
 ## 6. Run the app
 Start the development server:
 
