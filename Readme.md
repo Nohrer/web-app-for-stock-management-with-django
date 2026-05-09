@@ -1,6 +1,10 @@
 # How To Run
 
 ## 1. Install Python
+Ouvrir Command Line dans le dossier ou le project exist 
+DOSSIER
+|-web-app-for-stock-management-with-django
+vous devez etre dans le dossier parent  "DOSSIER" et non pas "web-app-for-stock-management-with-django"
 Use Python 3.11 or 3.12 if possible. Check your version with:
 
 ```bash
@@ -50,6 +54,9 @@ python manage.py seed_demo_data
 ```
 ### ---------------------------
 ## 6. Run the app
+```bash
+dir web-app-for-stock-management-with-django
+```
 Start the development server:
 
 ```bash
