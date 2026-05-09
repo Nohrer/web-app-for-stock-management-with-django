@@ -316,8 +316,7 @@ def demande_fournisseur(request):
             # Build a fresh queryset that includes all necessary suppliers to avoid distinct() conflicts
             form_fournisseurs_qs = Fournisseur.objects.filter(
                 Q(id__in=selected_supplier_ids) |
-                (Q(categories__id__in=selected_categories) if selected_categories else Q()) |
-                (Q(delai_livraison_jours__lte=selected_delai) if selected_delai else Q())
+                (Q(categories__id__in=selected_categories) if selected_categories else Q())
             ).distinct()
         else:
             form_fournisseurs_qs = fournisseurs_qs

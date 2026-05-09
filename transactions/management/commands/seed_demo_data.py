@@ -179,8 +179,6 @@ class Command(BaseCommand):
                     'telephone': '0612345678',
                     'email': 'tech.distrib@example.com',
                     'categories': ['Electronique', 'Informatique'],
-                    'delai_livraison_jours': 3,
-                    'prix_reference': Decimal('1200.00'),
                     'note': 'Partenaire historique pour les achats techniques',
                 },
                 {
@@ -189,8 +187,6 @@ class Command(BaseCommand):
                     'telephone': '0622334455',
                     'email': 'food.market@example.com',
                     'categories': ['Alimentation'],
-                    'delai_livraison_jours': 2,
-                    'prix_reference': Decimal('450.00'),
                     'note': 'Livraisons rapides pour les denrees et consommables',
                 },
                 {
@@ -199,8 +195,6 @@ class Command(BaseCommand):
                     'telephone': '0633445566',
                     'email': 'bureau.plus@example.com',
                     'categories': ['Bureau'],
-                    'delai_livraison_jours': 4,
-                    'prix_reference': Decimal('380.00'),
                     'note': 'Fournisseur de reference pour les achats de bureau',
                 },
             ]
@@ -212,16 +206,12 @@ class Command(BaseCommand):
                         'adresse': spec['adresse'],
                         'telephone': spec['telephone'],
                         'email': spec['email'],
-                        'delai_livraison_jours': spec['delai_livraison_jours'],
-                        'prix_reference': spec['prix_reference'],
                         'note': spec['note'],
                     },
                 )
                 fournisseur.adresse = spec['adresse']
                 fournisseur.telephone = spec['telephone']
                 fournisseur.email = spec['email']
-                fournisseur.delai_livraison_jours = spec['delai_livraison_jours']
-                fournisseur.prix_reference = spec['prix_reference']
                 fournisseur.note = spec['note']
                 fournisseur.save()
                 fournisseur.categories.set([categories[name] for name in spec['categories']])
@@ -236,8 +226,6 @@ class Command(BaseCommand):
                     supplier_name = f'Demo Pair Supplier {pair_number:02d}-{supplier_idx}'
                     supplier_phone = f'07{pair_number:02d}{supplier_idx}45678'
                     supplier_email = f'demo.pair.{pair_number:02d}.{supplier_idx}@example.com'
-                    supplier_delay = 2 + ((pair_number + supplier_idx) % 5)
-                    supplier_price = Decimal('300.00') + Decimal(pair_number * 15 + supplier_idx * 10)
 
                     fournisseur, _ = Fournisseur.objects.get_or_create(
                         nom=supplier_name,
@@ -245,16 +233,12 @@ class Command(BaseCommand):
                             'adresse': f'Zone industrielle lot {pair_number:02d}-{supplier_idx}',
                             'telephone': supplier_phone,
                             'email': supplier_email,
-                            'delai_livraison_jours': supplier_delay,
-                            'prix_reference': supplier_price,
                             'note': f'Fournisseur demo rattache aux sous-categories: {", ".join(pair_categories)}',
                         },
                     )
                     fournisseur.adresse = f'Zone industrielle lot {pair_number:02d}-{supplier_idx}'
                     fournisseur.telephone = supplier_phone
                     fournisseur.email = supplier_email
-                    fournisseur.delai_livraison_jours = supplier_delay
-                    fournisseur.prix_reference = supplier_price
                     fournisseur.note = f'Fournisseur demo rattache aux sous-categories: {", ".join(pair_categories)}'
                     fournisseur.save()
                     fournisseur.categories.set([categories[name] for name in pair_categories])
@@ -320,8 +304,6 @@ class Command(BaseCommand):
                 defaults={
                     'date': date(2026, 5, 6),
                     'categorie': categories['Electronique'],
-                    'delai_max_jours': 5,
-                    'prix_max': Decimal('1500.00'),
                     'message': 'Demande de reference pour les achats technologiques.',
                     'email_envoye': True,
                 },
