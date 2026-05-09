@@ -15,6 +15,7 @@ python3 -m venv .venv
 ```
 
 ## 3. Activate the virtual environment
+
 On Linux or macOS:
 
 ```bash
@@ -61,7 +62,7 @@ Open:
 http://127.0.0.1:8000/
 ```
 
-## 7. Optional Tailwind rebuild
+## 7. Optional Tailwind rebuild (Normalment y a pas besoin de executer cette commande)
 If you need to rebuild the frontend CSS:
 
 ```bash
